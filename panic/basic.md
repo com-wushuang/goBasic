@@ -13,3 +13,72 @@
 - 注意，这与从函数返回错误值的意义是完全不同的。当我们的函数返回一个非nil的错误值时，函数的调用方有权选择不处理，并且不处理的后果往往是不致命的。“不致命”的意思是，不至于使程序无法提供任何功能（也可以说僵死）或者直接崩溃并终止运行（也就是真死）。
 - 但是，当一个 panic 发生时，如果我们不施加任何保护措施，那么导致的直接后果就是程序崩溃，这显然是致命的。
 
+### 怎样让 panic 包含一个值，以及应该让它包含什么样的值？
+- 在调用panic函数时，把某个值作为参数传给该函数就可以了。由于panic函数的唯一一个参数是空接口（也就是interface{}）类型的，所以从语法上讲，它可以接受任何类型的值。
+- 但是，我们最好传入error类型的错误值，或者其他的可以被有效序列化的值。
+
+### 怎样施加应对 panic 的保护措施，从而避免程序崩溃？
+- Go 语言的内建函数`recover`专用于恢复 panic。recover函数无需任何参数，并且会返回一个空接口类型的值。如果用法正确，这个值实际上就是即将恢复的 panic 包含的值。
+- 并且，如果这个 panic 是因我们调用panic函数而引发的，那么该值同时也会是我们此次调用panic函数时，传入的参数值副本。
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func main() {
+	fmt.Println("Enter function main.") // 引发panic。
+	panic(errors.New("something wrong"))
+	p := recover()
+	fmt.Printf("panic: %s\n", p)
+	fmt.Println("Exit function main.")
+}
+```
+- 在上面这个main函数中，我先通过调用panic函数引发了一个 panic，紧接着想通过调用recover函数恢复这个 panic。可结果呢？你一试便知，程序依然会崩溃，这个recover函数调用并不会起到任何作用，甚至都没有机会执行。还记得吗？我提到过 panic 一旦发生，控制权就会讯速地沿着调用栈的反方向传播。所以，在panic函数调用之后的代码，根本就没有执行的机会 。
+- 那如果我把调用recover函数的代码提前呢？也就是说，先调用recover函数，再调用panic函数会怎么样呢？这显然也是不行的，因为，如果在我们调用recover函数时未发生 panic，那么该函数就不会做任何事情，并且只会返回一个nil。
+
+### defer语句的由来
+顾名思义，defer语句就是被用来延迟执行代码的。延迟到什么时候呢？这要延迟到该语句所在的函数即将执行结束的那一刻，无论结束执行的原因是什么。上面的那么问题恰恰说明了defer存在的意义。
+- go语句有些类似，一个defer语句总是由一个defer关键字和一个调用表达式组成。
+- 无论函数结束执行的原因是什么，其中的defer函数调用都会在它即将结束执行的那一刻执行。即使导致它执行结束的原因是一个 panic 也会是这样。正因为如此，我们需要联用defer语句和recover函数调用，才能够恢复一个已经发生的 panic。 
+  
+我们来看一下经过修正的代码。
+```go
+
+package main
+
+import (
+	"fmt"
+	"errors"
+)
+
+func main() {
+	fmt.Println("Enter function main.")
+	defer func(){
+		fmt.Println("Enter defer function.")
+		if p := recover(); p != nil {
+			fmt.Printf("panic: %s\n", p)
+		}
+		fmt.Println("Exit defer function.")
+	}()
+	// 引发panic。
+	panic(errors.New("something wrong"))
+	fmt.Println("Exit function main.")
+}
+```
+- 在这个main函数中，我先编写了一条defer语句，并在defer函数中调用了recover函数。仅当调用的结果值不为nil时，也就是说只有 panic 确实已发生时，我才会打印一行以“panic:”为前缀的内容。
+- 紧接着，我调用了panic函数，并传入了一个error类型值。这里一定要注意，我们要尽量把defer语句写在函数体的开始处，因为在引发 panic 的语句之后的所有语句，都不会有任何执行机会。
+- 也只有这样，defer函数中的recover函数调用才会拦截，并恢复defer语句所属的函数，及其调用的代码中发生的所有 panic。
+
+### 如果一个函数中有多条defer语句，那么那几个defer函数调用的执行顺序是怎样的？
+- 在同一个函数中，defer函数调用的执行顺序与它们分别所属的defer语句的出现顺序（更严谨地说，是执行顺序）完全相反。
+- 其中的写在最下边的defer函数调用会最先执行，其次是写在它上边、与它的距离最近的那个defer函数调用，以此类推，最上边的defer函数调用会最后一个执行。
+- 如果函数中有一条for语句，并且这条for语句中包含了一条defer语句，那么，显然这条defer语句的执行次数，就取决于for语句的迭代次数。同一条defer语句每被执行一次，其中的defer函数调用就会产生一次，而且，这些函数调用同样不会被立即执行。
+
+### defer 语句原理
+- 在defer语句每次执行的时候，Go 语言会把它携带的defer函数及其参数值另行存储到一个链表中。
+- 这个链表与该defer语句所属的函数是对应的，并且，它是先进后出（FILO）的，相当于一个栈。
+- 在需要执行某个函数中的defer函数调用的时候，Go 语言会先拿到对应的链表，然后从该链表中一个一个地取出defer函数及其参数值，并逐个执行调用。
