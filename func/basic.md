@@ -126,3 +126,32 @@ func genCalculator(op operate) calculateFunc {
 
 ![image](https://github.com/com-wushuang/goBasic/blob/main/image/bibao.webp)
 
+### 闭包的意义是什么？
+- 表面上看，我们只是延迟实现了一部分程序逻辑或功能而已，但实际上，我们是在动态地生成那部分程序逻辑。 
+- 我们可以借此在程序运行的过程中，根据需要生成功能不同的函数，继而影响后续的程序行为。
+- 这与 GoF 设计模式中的“模板方法”模式有着异曲同工之妙，不是吗？
+
+### 传入函数的那些参数值后来怎么样了？
+```go
+
+package main
+
+import "fmt"
+
+func main() {
+  array1 := [3]string{"a", "b", "c"}
+  fmt.Printf("The array: %v\n", array1)
+  array2 := modifyArray(array1)
+  fmt.Printf("The modified array: %v\n", array2)
+  fmt.Printf("The original array: %v\n", array1)
+}
+
+func modifyArray(a [3]string) [3]string {
+  a[1] = "x"
+  return a
+}
+```
+- 原数组`array1`会因`modify`函数对参数值的修改而改变吗？
+- 原数组不会改变。为什么呢？原因是，所有传给函数的参数值都会被复制，函数在其内部使用的并不是参数值的原值，而是它的副本。
+- 由于数组是值类型，所以每一次复制都会拷贝它，以及它的所有元素值。我在modify函数中修改的只是原数组的副本而已，并不会对原数组造成任何影响。
+- 对于引用类型，比如：切片、字典、通道，像上面那样复制它们的值，只会拷贝它们本身而已，并不会拷贝它们引用的底层数据。也就是说，这时只是浅表复制，而不是深层复制。
