@@ -124,5 +124,5 @@ func genCalculator(op operate) calculateFunc {
 - Go 语言编译器读到`if op == nil {`时会试图去寻找`op`所代表的东西，它会发现`op`代表的是`genCalculator`函数的参数，然后，它会把这两者联系起来。这时可以说，自由变量op被“捕获”了。
 - 当程序运行到这里的时候，`op`就是那个参数值了。如此一来，这个闭包函数的状态就由“不确定”变为了“确定”，或者说转到了“闭合”状态，至此也就真正地形成了一个闭包。
 
-
+![image](https://github.com/com-wushuang/goBasic/blob/main/image/bibao.webp)
 
