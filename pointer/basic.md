@@ -38,7 +38,7 @@ unsafe 包提供了 2 点重要的能力：
 - 任何类型的指针和 unsafe.Pointer 可以相互转换。
 - uintptr 类型和 unsafe.Pointer 可以相互转换。
 
-![unsafe](unsafe.png)
+![unsafe](https://github.com/com-wushuang/goBasic/blob/main/image/unsafe.png)
 
 ### 获取slice长度
 
