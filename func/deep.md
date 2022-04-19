@@ -79,7 +79,7 @@ $ GOOS=linux GOARCH=amd64 go tool compile -S main.go
 - SP是栈顶指针寄存器，SUBQ 表示减操作；栈内存是向下增长，此操作相当于给函数分配24字节栈帧；
 - BP保存了当前函数栈帧栈底的地址，一开始需要将旧的BP值保存。然后将新的栈帧地址赋值给BP寄存器；
 
-![bp寄存器变化](bp寄存器变化.png)
+![bp寄存器变化](https://github.com/com-wushuang/goBasic/blob/main/image/bp_register.png)
 
 `main` 作为调用者，通过对SP寄存器做减法，将其栈帧大小增加了 24 个字节，这 24 个字节中:
 
