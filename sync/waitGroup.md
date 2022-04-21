@@ -79,3 +79,8 @@ func f(i int, wg *sync.WaitGroup) {
     wg.Done()
 }
 ```
+
+## 实际应用场景
+`sync.WaitGroup`可以等待一组`Goroutine`的返回，一个比较常见的使用场景是批量发出`RPC`或者`HTTP`请求
+- 比如我在网关服务实现了一个批量删除用户的API,接口的是现实批量调用用户服务的删除用户(单个用户)接口。
+- 因为删除用户请求之间是无关联的,那么可以使用 `waitGroup`来实现并发执行任务。
