@@ -96,3 +96,4 @@ func UnescapeString(s string) string {
 - `html.UnescapeString(s)`函数是线程安全的，可能会被用户程序在并发场景下调用，因此对`entity`的初始化需要加锁，使用`sync.Once`能保证这一点。
 
 ## 原理
+有时间再补充
