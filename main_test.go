@@ -1,10 +1,11 @@
 package goBasic
 
 import (
-	"sync"
+	"encoding/json"
 	"testing"
 )
 
 func TestName(t *testing.T) {
-	sync.Once{}
+	json.Marshal()
+	json.Unmarshal()
 }
