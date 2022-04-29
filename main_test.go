@@ -2,11 +2,13 @@ package goBasic
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
 func TestName(t *testing.T) {
 	fmt.Println("return", test())
+	strings.Builder{}
 }
 
 func test() (i int) {
