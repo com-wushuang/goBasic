@@ -49,6 +49,8 @@ func (b *Builder) WriteString(s string) (int, error) {
 - 支持的几种追加字符串的方式,都是往`buf`这个字节切片用`append`方法追加，只不过不同的参数追加前的处理稍有不同
 - 调用上述方法把新的内容拼接到已存在的内容的尾部（也就是右边）
 - 这时，如有必要，Builder值会自动地对自身的内容容器进行扩容。这里的自动扩容策略与切片的扩容策略一致
+- 同时，只要没有扩容，Builder值中已存在的内容就不会再被拷贝
+- Builder值的自动扩容，我们还可以选择手动扩容，这通过调用Builder值的Grow方法就可以做到
 
 ## 和string的不同
 - 与string值相比，Builder值的优势其实主要体现在字符串拼接方面。
@@ -109,3 +111,12 @@ func (b *Builder) String() string {
 }
 ```
 bytes.Buffer 的注释中还特意提到了： "To build strings more efficiently, see the strings.Builder type."
+
+## strings.Builder在使用上的限制
+- `strings.Builder`不推荐被拷贝
+- 当你试图拷贝 `strings.Builder` 并写入的时候，你的程序就会崩溃
+- 你已经知道 `strings.Builder` 内部通过 slice 来保存和管理内容
+- `slice` 内部则是通过一个指针指向实际保存内容的数组
+- 当我们拷贝了 `builder` 以后，同样也拷贝了其 `slice` 的指针
+- 但是它仍然指向同一个旧的数组。当你对源 `builder` 或者拷贝后的 `builder` 写入的时候，问题就产生了 另一个 builder 指向的数组内容也被改变了
+- 这就是为什么 strings.Builder 不允许拷贝的原因
