@@ -97,6 +97,8 @@ nil通道：
 2.已关闭的通道，对其进行发送数据
 对于一个已初始化，但并未关闭的通道来说，收发操作一定不会引发 panic(只会出现阻塞)。但是通道一旦关闭，再对它进行发送操作(接收操作不会)，就会引发 panic。
 
+3.关闭一个nil的通道
+
 ### 只读通道和只写通道
 `var writeOnlyChan = make(chan<- int)` :只写通道
 `var readOnlyChan = make(<-chan int)` :只读通道
