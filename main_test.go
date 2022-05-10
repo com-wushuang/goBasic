@@ -2,20 +2,31 @@ package goBasic
 
 import (
 	"fmt"
-	"strings"
 	"testing"
+	"unsafe"
 )
-
-func TestName(t *testing.T) {
-	fmt.Println("return", test())
-	strings.Builder{}
+type slice struct {
+	array unsafe.Pointer // 元素指针
+	len   int // 长度
+	cap   int // 容量
 }
 
-func test() (i int) {
-	i = 0
-	defer func() {
-		i += 1
-		fmt.Println("defer2")
-	}()
-	return i
+func TestName(t *testing.T) {
+	a := make([]int, 3, 4)
+	a = []int{1, 2, 3}
+	s1:= (*slice)(unsafe.Pointer(&a))
+	array1:=(*[4]int)(s1.array)
+	fmt.Println(array1)
+	test(a)
+	fmt.Println(a)
+	s2 := (*slice)(unsafe.Pointer(&a))
+	array2:=(*[4]int)(s2.array)
+	fmt.Println(array2)
+
+}
+func test(a []int) {
+	a = append(a, 4)
+	s2 := (*slice)(unsafe.Pointer(&a))
+	array2:=(*[4]int)(s2.array)
+	fmt.Println(array2)
 }
