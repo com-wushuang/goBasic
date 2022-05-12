@@ -123,7 +123,7 @@ func tooManyOverflowBuckets(noverflow uint16, B uint8) bool {
 
 例子：
 原始 B = 2，map中有 2 个 key 的哈希值低 3 位分别为：010，110。由于原来 B = 2，所以低 2 位 10 决定它们落在 2 号桶，现在 B 变成 3，所以 010、110 分别落入 2、6 号桶。
-
+![append_example](https://github.com/com-wushuang/goBasic/blob/main/image/append_example.png)
 **情形二**
 容量变化：
 
