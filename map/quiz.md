@@ -107,6 +107,7 @@ func tooManyOverflowBuckets(noverflow uint16, B uint8) bool {
 - 这两种情况都会导致map的效率变低下，所以要进行扩容，提升效率，其实是一种平衡
 
 **情形一**
+
 容量变化：
 
 - 元素太多，而 bucket 数量太少，很简单：将 B 加 1，bucket 最大数量（2^B）直接变成原来 bucket 数量的 2 倍。
@@ -122,9 +123,12 @@ func tooManyOverflowBuckets(noverflow uint16, B uint8) bool {
 - 扩容后，B 增加了 1，意味着 buckets 总数是原来的 2 倍，原来一个桶“裂变”到两个桶。
 
 例子：
+
 原始 B = 2，map中有 2 个 key 的哈希值低 3 位分别为：010，110。由于原来 B = 2，所以低 2 位 10 决定它们落在 2 号桶，现在 B 变成 3，所以 010、110 分别落入 2、6 号桶。
 ![append_example](https://github.com/com-wushuang/goBasic/blob/main/image/append_example.png)
+
 **情形二**
+
 容量变化：
 
 - 新的 buckets 数量和之前相等。
@@ -132,5 +136,18 @@ func tooManyOverflowBuckets(noverflow uint16, B uint8) bool {
 搬迁过程：
 
 - 从老的 buckets 搬迁到新的 buckets，由于 bucktes 数量不变，因此可以按序号来搬，比如原来在 0 号 bucktes，到新的地方后，仍然放在 0 号 buckets。
+
+**扩容前后map宏观视图**
+
+扩容前，B = 2，共有 4 个 buckets，lowbits 表示 hash 值的低位。假设我们不关注其他 buckets 情况，专注在 2 号 bucket：
+![before_map_append](https://github.com/com-wushuang/goBasic/blob/main/image/before_map_append.png)
+假设 overflow 太多，触发了等量扩容（对应于前面的情形二),扩容完成后，overflow bucket 消失了，key 都集中到了一个 bucket，更为紧凑了，提高了查找的效率:
+![after_map_append_1](https://github.com/com-wushuang/goBasic/blob/main/image/after_map_append_1.png)
+假设触发了 2 倍的扩容，那么扩容完成后，老 buckets 中的 key 分裂到了 2 个 新的 bucket。一个在 x part，一个在 y 的 part。依据是 hash 的 lowbits。新 map 中 0-3 称为 x part，4-7 称为 y part。
+![after_map_append_2](https://github.com/com-wushuang/goBasic/blob/main/image/after_map_append_2.png)
+
+
+
+
 
 
