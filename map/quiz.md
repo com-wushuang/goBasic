@@ -147,7 +147,77 @@ func tooManyOverflowBuckets(noverflow uint16, B uint8) bool {
 ![after_map_append_2](https://github.com/com-wushuang/goBasic/blob/main/image/after_map_append_2.png)
 
 
+## key为什么是无序的？
+- map 在扩容后，会发生 key 的搬迁，原来落在同一个 bucket 中的 key，搬迁后，有些 key 就要远走高飞了（bucket 序号加上了 2^B）。
+- 而遍历的过程，就是按顺序遍历 bucket，同时按顺序遍历 bucket 中的 key。搬迁后，key 的位置发生了重大的变化，有些 key 飞上高枝，有些 key 则原地不动。
+- 这样，遍历 map 的结果就不可能按原来的顺序了。
+----
+- 如果 hard code 的 map。同时，也不向 map 进行插入删除的操作，按理说每次遍历这样的 map 都会返回一个固定顺序的 key/value 序列吧。
+- 的确是这样，但是 Go 杜绝了这种做法，因为这样会给新手程序员带来误解，以为这是一定会发生的事情，在某些情况下，可能会酿成大错。
+- 当然，Go 做得更绝，当我们在遍历 map 时，并不是固定地从 0 号 bucket 开始遍历，每次都是从一个随机值序号的 bucket 开始遍历，并且是从这个 bucket 的一个随机序号的 cell 开始遍历。这样，即使你是一个写死的 map，仅仅只是遍历它，也不太可能会返回一个固定序列的 key/value 对了。
+- “迭代 map 的结果是无序的”这个特性是从 go 1.0 开始加入的。
 
+## 可以边遍历边删除吗？
+- map 并不是一个线程安全的数据结构。多个协程同时读写一个 map 是未定义的行为，如果被检测到，会直接 panic。
+- 在同一个协程内边遍历边删除，并不会检测到同时读写，理论上是可以这样做的。遍历的结果就可能不会是相同的了，有可能结果遍历结果集中包含了删除的 key，也有可能不包含，这取决于删除 key 的时间
+**线程安全的读写map**
+- 读之前调用 RLock() 函数，读完之后调用 RUnlock() 函数解锁；写之前调用 Lock() 函数，写完之后，调用 Unlock() 解锁。
+- sync.Map 是线程安全的 map，也可以使用。
+
+## map是线程安全的吗？
+- 在查找、赋值、遍历、删除的过程中都会检测写标志，一旦发现写标志置位（bit位等于1），则直接 panic。
+- 赋值和删除函数在检测完写标志是复位之后，先将写标志位置位，才会进行之后的操作。
+
+**检测写标志**
+```go
+if h.flags&hashWriting == 0 { // 按位与
+		throw("concurrent map writes")
+	}
+```
+**设置写标志**
+```go
+h.flags |= hashWriting
+```
+
+## map的比较
+- 两个map变量之间使用判等表达式是没有办法通过编译的
+- map变量只能和nil做判等比较
+```go
+package main
+
+import "fmt"
+
+func main() {
+	var m map[string]int
+	var n map[string]int
+
+	fmt.Println(m == nil)
+	fmt.Println(n == nil)
+
+	// 不能通过编译
+	//fmt.Println(m == n)
+}
+```
+
+**逻辑判等**
+1.都为 nil
+2.非空、长度相等，指向同一个 map 实体对象
+3.相应的 key 指向的 value “深度”相等
+
+## 可以对map的元素取地址么？
+无法对map 的 key 或 value 进行取址。以下代码不能通过编译：
+```go
+package main
+
+import "fmt"
+
+func main() {
+	m := make(map[string]int)
+
+	fmt.Println(&m["chengjun"]) // 编译报错：cannot take the address of m["chengjun"]
+}
+```
+如果通过其他 hack 的方式，例如 unsafe.Pointer 等获取到了 key 或 value 的地址，也不能长期持有，因为一旦发生扩容，key 和 value 的位置就会改变，之前保存的地址也就失效了。
 
 
 
