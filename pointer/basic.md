@@ -149,3 +149,45 @@ pb := (*int16)(unsafe.Pointer(tmp))
 从垃圾收集器的视角来看，一个unsafe.Pointer是一个指向变量的指针，因此当变量被移动是对应的指针也必须被更新；但是uintptr类型的临时变量只是一个普通的数字，所以其值不会被改变。
 
 上面错误的代码因为引入一个非指针的临时变量tmp，导致垃圾收集器无法正确识别这个是一个指向变量x的指针。当第二个语句执行时，变量x可能已经被转移，这时候临时变量tmp也就不再是现在的&x.b地址。第三个向之前无效地址空间的赋值语句将彻底摧毁整个程序！
+
+
+### 实现字符串和 bytes 切片之间的零拷贝转换
+**copy实现**
+```go
+s:="chengjun" // s是字符串
+b:=[]byte(s) // 把s字符串中的值拷贝到byte切片的底层数组了
+```
+
+**zero-copy实现**
+分析 `slice` 和 `string` 的底层数据结构：
+```go
+type StringHeader struct {
+	Data uintptr
+	Len  int
+}
+
+type SliceHeader struct {
+	Data uintptr
+	Len  int
+	Cap  int
+}
+```
+只需要共享底层 Data 和 Len 就可以实现 zero-copy：
+```go
+func string2bytes(s string) []byte {
+	return *(*[]byte)(unsafe.Pointer(&s))
+}
+func bytes2string(b []byte) string{
+	return *(*string)(unsafe.Pointer(&b))
+}
+```
+但是存在的问题是，无法共享Cap字段，为此我做了如下的实验：
+```go
+func TestName(t *testing.T) {
+	s:="chengjun"
+	b:=string2bytes(s)
+	fmt.Println(len(b))
+	fmt.Println(cap(b))
+}
+```
+cap的值在每次运行代码的时候，都是不一一致的，说明cap没法共享。
