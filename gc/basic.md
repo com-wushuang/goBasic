@@ -51,3 +51,46 @@ https://jishuin.proginn.com/p/763bfbd624fa
 - 这个过程可以视为以灰色对象为波面，将黑色对象和白色对象分离，使波面不断向前推进，直到所有可达的灰色对象都变为黑色对象为止的过程。
 - 如下图所示：
 ![gc-blueprint](https://github.com/com-wushuang/goBasic/blob/main/image/gc-blueprint.png)
+
+## 有了 GC，为什么还会发生内存泄露？
+我们常说的内存泄漏，用严谨的话来说应该是：预期的能很快被释放的内存由于附着在了长期存活的内存上、或生命期意外地被延长，导致预计能够立即回收的内存而长时间得不到回收。
+
+### 形式1：预期能被快速释放的内存因被根对象引用而没有得到迅速释放 
+当有一个全局对象时，可能不经意间将某个变量附着在其上，且忽略将其进行释放，则该内存永远不会得到释放。例如：
+```go
+var cache = map[interface{}]interface{}{}
+
+func keepalloc() {
+	for i := 0; i < 10000; i++ {
+		m := make([]byte, 1<<10) // 将 m 变量附着在了全局变量中 ，得不到释放
+		cache[i] = m
+	}
+}
+```
+
+### 形式2：goroutine 泄漏
+- 当我们用`go` 关键字创建了 `Goroutine`时， 为了维护执行用户代码的上下文信息，runtime会维持一些数据结构用来存储这些上下文信息，必然就需要消耗一定的内存，而这些内存在目前版本的 Go 中是不会被释放的。
+- 因此，如果一个程序持续不断地产生新的 goroutine、且不结束已经创建的 goroutine 并复用这部分内存，就会造成内存泄漏的现象，例如：
+```go
+func keepalloc2() {
+	for i := 0; i < 100000; i++ {
+		go func() {
+			select {}
+		}()
+	}
+}
+```
+- goroutine 泄漏还可能由 channel 泄漏导致。而 channel 的泄漏本质上与 goroutine 泄漏存在直接联系。
+- Channel 作为一种同步原语，会连接两个不同的 goroutine，如果一个 goroutine 尝试向一个没有接收方的无缓冲 channel 发送消息，则该 goroutine 会被永久的休眠，整个 goroutine 及其执行栈都得不到释放，例如：
+```go
+var ch = make(chan struct{})
+
+func keepalloc3() {
+	for i := 0; i < 100000; i++ {
+		// 没有接收方，goroutine 会一直阻塞
+		go func() { 
+			ch <- struct{}{} 
+		}()
+	}
+}
+```
