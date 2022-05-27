@@ -120,7 +120,6 @@ type gobuf struct {
 	bp   uintptr // for GOEXPERIMENT=framepointer
 }
 ```
-
 ### M
 - 取 `machine` 的首字母,代表一个工作线程(但也仅仅是代表，并不是真的系统线程)，或者说系统线程。
 - G 需要调度到 M 上才能运行，M 是真正工作的人。
@@ -284,7 +283,40 @@ type p struct {
 - 系统调用: 当 `goroutine` 进行系统调用时，会阻塞 M，所以它会被调度走，同时一个新的 `goroutine` 会被调度上来。
 - 内存同步访问: `atomic`，`mutex`，`channel` 操作等会使 `goroutine` 阻塞，因此会被调度走。等条件满足后（例如其他 goroutine 解锁了）还会被调度上来继续运行。
 
+### go调度的生命周期
+![golang_schedule_lifetime2](https://github.com/com-wushuang/goBasic/blob/main/image/golang_schedule_lifetime2.png)
+- `M0` 是启动程序后的编号为 `0` 的主线程，这个 `M` 对应的实例会在全局变量 `runtime.m0` 中，不需要在 `heap` 上分配，`M0` 负责执行初始化操作和启动第一个 `G`， 在之后 `M0` 就和其他的 `M` 一样了。
+- `G0` 是每次启动一个 `M` 都会第一个创建的 `gourtine`，`G0` 仅用于负责调度的 `G`，`G0` 不指向任何可执行的函数，每个 `M` 都会有一个自己的 `G0`。在调度或系统调用时会使用 `G0` 的栈空间，全局变量的 `G0` 是 `M0` 的 `G0`。
 
+上面生命周期流程说明：
+- `runtime` 创建最初的线程 `m0` 和 `goroutine g0`，并把两者进行关联（`g0.m = m0`)
+- 调度器初始化：设置M最大数量，P个数，栈和内存出事，以及创建 GOMAXPROCS个P
+- 示例代码中的 `main` 函数是 `main.main`，`runtime` 中也有 1 个 `main` 函数 —— `runtime.main`，代码经过编译后，`runtime.main` 会调用 `main.main`，程序启动时会为 `runtime.main` 创建 `goroutine`，称它为 `main goroutine` 吧，然后把 `main goroutine` 加入到 P 的本地队列
+- 启动 `m0`，`m0` 已经绑定了 `P`，会从 `P` 的本地队列获取 `G`，获取到 `main goroutine`。
+- `G` 拥有栈，`M` 根据 `G` 中的栈信息和调度信息设置运行环境。
+- `M` 运行 `G`。
+- `G` 退出，再次回到 `M` 获取可运行的 `G`，这样重复下去，直到 `main.main` 退出，`runtime.main` 执行 `Defer` 和 `Panic` 处理，或调用 `runtime.exit` 退出程序。
 
+### 用户态阻塞和系统调用阻塞
+- GMP模型的阻塞可能发生在下面几种情况：
+  - `I/O，select` 
+  - `block on syscall` 
+  - `channel` 
+  - `等待锁` 
+  - `runtime.Gosched()`
+- 用户态阻塞:
+  - 当 `goroutine` 因为 `内存同步访问` 操作或者 `network I/O` 而阻塞时(实际上golang已经用 `netpoller` 实现了 `goroutine` 网络 `I/O` 阻塞不会导致 `M` 被阻塞，仅阻塞`G`），对应的G会被放置到某个`wait队列`(如channel的waitq)，该G的状态由`_Gruning`变为`_Gwaitting`，而M会跳过该G尝试获取并执行下一个G，如果此时没有`runnable`的G供M运行，那么M将解绑P，并进入sleep状态；
+  - 当阻塞的G被另一端的`G2`唤醒时(比如 `channel` 的可读/写通知)，G被标记为`runnable`，尝试加入G2所在P的`runnext`，然后再是P的`Local`队列和`Global`队列。
+- 系统调用阻塞:
+  - 当G被阻塞在某个系统调用上时，此时G会阻塞在 `_Gsyscall` 状态，M也处于 `block on syscall` 状态。
+  - 此时的`M`可被抢占调度：执行该`G`的`M`会与`P`解绑，而`P`则尝试与其它`idle`的`M`绑定，继续执行其它`G`。如果没有其它`idle`的`M`，但`P`的`Local`队列中仍然有`G`需要执行，则创建一个新的`M`。
+  - 当系统调用完成后，`G`会重新尝试获取一个`idle`的`P`进入它的`Local`队列恢复执行，如果没有`idle`的`P`，`G`会被标记为`runnable`加入到`Global`队列。
 
-
+### 调度的流程状态
+![golang_schedule_status](https://github.com/com-wushuang/goBasic/blob/main/image/golang_schedule_status.jpeg)
+从上图我们可以看出来：
+- 每个`P`有个局部队列，局部队列保存待执行的`goroutine`(流程2)，当`M`绑定的`P`的的局部队列已经满了之后就会把`goroutine`放到全局队列(流程2-1)
+- 每个`P`和一个`M`绑定，`M`是真正的执行`P`中`goroutine`的实体(流程3)，`M`从绑定的`P`中的局部队列获取`G`来执行
+- 当`M`绑定的`P`的局部队列为空时，`M`会从全局队列获取到本地队列来执行`G`(流程3.1)，当从全局队列中没有获取到可执行的`G`时候，`M`会从其他`P`的局部队列中偷取`G`来执行(流程3.2)，这种从其他`P`偷的方式称为`work stealing`
+- 当`G`因系统调用(`syscall`)阻塞时会阻塞M，此时`P`会和`M`解绑即`hand off`，并寻找新的`idle`的`M`，若没有`idle`的`M`就会新建一个`M`(流程5.1)。
+- 当`G`因`channel`或者`network I/O`阻塞时，不会阻塞`M`，`M`会寻找其他`runnable`的`G`；当阻塞的`G`恢复后会重新进入`runnable`进入`P`队列等待执行(流程5.3)
