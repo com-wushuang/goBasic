@@ -259,7 +259,17 @@ func slicebytetostring(buf *tmpBuf, b []byte) (str string) {
 ##### stringtoslicebyte
 
 ```go
-func stringtoslicebyte(buf *tmpBuf, s string) []byte {	var b []byte	if buf != nil && len(s) <= len(buf) {		*buf = tmpBuf{}		b = buf[:len(s)]	} else {		b = rawbyteslice(len(s))	}	copy(b, s)	return b}
+func stringtoslicebyte(buf *tmpBuf, s string) []byte {
+	var b []byte
+	if buf != nil && len(s) <= len(buf) {
+		*buf = tmpBuf{}
+		b = buf[:len(s)]
+	} else {
+		b = rawbyteslice(len(s))
+	}
+	copy(b, s)
+	return b
+}
 ```
 
 - 当传入缓冲区时，它会使用传入的缓冲区存储 `[]byte`；

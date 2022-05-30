@@ -2,11 +2,11 @@ package goBasic
 
 import (
 	"fmt"
-	"runtime"
 	"testing"
 )
 
-
 func TestName(t *testing.T) {
-	fmt.Println(runtime.NumCPU())
+	a := [2]int{1, 2}
+	fmt.Println(len(a))
+	fmt.Println(cap(a))
 }
