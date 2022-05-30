@@ -82,6 +82,7 @@ func test(a []int) {
 ```
 - 在`test`函数中，`append`返回了一个新的`slice`结构体，该结构体中指针指向的底层数组和main函数中的a指向的是同一个
 - `test`函数中的`a`这个`slice`的`len`是`4`，cap是`4`
+
 【例子2】下面的输出是多少？
 ```go
 package main
