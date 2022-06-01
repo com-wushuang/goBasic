@@ -1,6 +1,3 @@
-https://tech.ipalfish.com/blog/2020/03/30/golang-context/
-https://draveness.me/golang/docs/part3-runtime/ch06-concurrency/golang-context/
-
 ## context 是什么
 
 在 Go1.7 加入到的标准库context，它定义了Context类型，专门用来简化 对于处理单个请求的多个 goroutine 之间与请求域的数据、取消信号、超时控制、截止时间等相关操作。本质上是一个同步工具。
