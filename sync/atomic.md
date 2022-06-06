@@ -79,24 +79,7 @@ func addValue(delta int32){
 
 ## 载入
 载入,保证了读取到操作数前没有其他任务对它进行变更,操作方法的命名方式为LoadXXXType。
-```go
-var value int32
 
-func addValue(delta int32){
-    //在被操作值被频繁变更的情况下,CAS操作并不那么容易成功,不得不利用for循环以进行多次尝试
-    for {
-        //v := value
-        //在进行读取value的操作的过程中,其他对此值的读写操作是可以被同时进行的,那么这个读操作很可能会读取到一个只被修改了一半的数据.
-        //因此我们要使用载入
-        v := atomic.LoadInt32(&value)
-        if atomic.CompareAndSwapInt32(&value, v, (v + delta)){
-            //在函数的结果值为true时,退出循环
-            break
-        }
-        //操作失败的缘由总会是value的旧值已不与v的值相等了
-    }
-}
-```
 ## 存储
 - 在原子地存储某个值的过程中，任何CPU都不会进行针对同一个值的读或写操作
 - 原子的值存储操作总会成功，因为它并不会关心被操作值的旧值是什么
