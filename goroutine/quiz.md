@@ -18,7 +18,7 @@
 
 - Go `scheduler` 可以说是 Go `runtime`的一个最重要的部分了。
 - Runtime 维护所有的 `goroutines`，并通过 `scheduler` 来进行调度。
-- `Goroutines` 和 `threads` 是独立的，但是 `goroutines` 要依赖 threads 才能执行。
+- `Goroutines` 和 `threads` 是独立的，但是 `goroutines` 要依赖 `threads` 才能执行。
 - Go 程序执行的高效和 `scheduler` 的调度是分不开的。
 
 ## scheduler 底层原理
