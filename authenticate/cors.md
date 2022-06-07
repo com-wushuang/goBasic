@@ -1,10 +1,4 @@
----
-title: cors
-date: 2021-01-14 16:31:50
-tags:
----
-
-![跨域请求示例](CORS_example.png)
+![跨域请求示例](https://github.com/com-wushuang/goBasic/blob/main/image/CORS_example.png)
 
 运行在 `http://domain-a.com` 的JavaScript代码使用[`XMLHttpRequest`](https://developer.mozilla.org/zh-CN/docs/Web/API/XMLHttpRequest)来发起一个到 `https://domain-b.com/data.json` 的请求。
 
@@ -26,7 +20,7 @@ tags:
 
 某些请求不会触发 CORS 预检请求。本文称这样的请求为“简单请求”。简单请求满足的条件，本文略过，有很多官方资料介绍。请求的过程如下：
 
-![简单请求过程](simple-req-updated.png)
+![简单请求过程](https://github.com/com-wushuang/goBasic/blob/main/image/simple-req-updated.png)
 
 - 请求Header字段 [`Origin`](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Origin) 表明该请求来源于 `http://foo.example`
 - 服务端返回的 `Access-Control-Allow-Origin: *` 表明，该资源可以被**任意**外域访问。
@@ -37,7 +31,7 @@ tags:
 
 与简单请求不同，“需预检的请求”要求必须首先使用 [`OPTIONS`](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/OPTIONS)  方法发起一个预检请求到服务器，以获知服务器是否允许该实际请求。
 
-![预检请求的场景](preflight_correct.png)
+![预检请求的场景](https://github.com/com-wushuang/goBasic/blob/main/image/preflight_correct.png)
 
 1.浏览器检测到，从 JavaScript 中发起的请求需要被预检。首先发起了一个使用 `OPTIONS `方法的预检请求。
 
@@ -82,7 +76,7 @@ function callOtherDomain(){
 
 过程如下：
 
-![携带cookie的跨域请求](cred-req-updated.png)
+![携带cookie的跨域请求](https://github.com/com-wushuang/goBasic/blob/main/image/cred-req-updated.png)
 
 请求
 ```http
