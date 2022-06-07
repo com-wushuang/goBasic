@@ -38,7 +38,7 @@
 
 ![informer](https://github.com/com-wushuang/goBasic/blob/main/image/informer.png)
 
-1.Informer 在初始化时，Reflector 会先 List API 获得所有的 Pod
+1. Informer 在初始化时，Reflector 会先 List API 获得所有的 Pod
 2. Reflect 拿到全部 Pod 后，会将全部 Pod 放到 Store 中 
 3. 如果有⼈调⽤ Lister 的 List/Get ⽅法获取 Pod， 那么 Lister 会直接从 Store 中拿数据 
 4. Informer 初始化完成之后，Reflector 开始 Watch Pod，监听 Pod 相关 的所有事件;如果此时 pod_1 被 删除，那么 Reflector 会监听到这个事件 

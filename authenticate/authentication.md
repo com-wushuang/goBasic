@@ -99,6 +99,5 @@ Token是服务端生成的一串字符串，用作客户端进行请求的一个
 token的形式不局限于上面四种，其实用什么样的token都是可以的；jwt和oauth2.0只是一种业界好的实现方式而已，并没有什么特别的地方，仅仅是实现他们需要遵照他们的协议。为了需要，你甚至可以自己创建一个协议。
 
 ## 参考
-
-[1]: https://chyroc.cn/posts/token-token-authentication-authorization/
+https://chyroc.cn/posts/token-token-authentication-authorization/
 
