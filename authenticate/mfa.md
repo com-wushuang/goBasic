@@ -136,3 +136,65 @@ func GenerateCodeCustom(secret string, counter uint64, opts ValidateOpts) (passc
 }
 ```
 
+**服务端验证**
+```go
+// ValidateCustom validates a TOTP given a user specified time and custom options.
+// Most users should use Validate() to provide an interpolatable TOTP experience.
+func ValidateCustom(passcode string, secret string, t time.Time, opts ValidateOpts) (bool, error) {
+	if opts.Period == 0 {
+		opts.Period = 30
+	}
+
+	counters := []uint64{}
+	counter := int64(math.Floor(float64(t.Unix()) / float64(opts.Period)))
+
+	counters = append(counters, uint64(counter))
+	for i := 1; i <= int(opts.Skew); i++ {
+		counters = append(counters, uint64(counter+int64(i)))
+		counters = append(counters, uint64(counter-int64(i)))
+	}
+
+	for _, counter := range counters {
+		rv, err := hotp.ValidateCustom(passcode, counter, secret, hotp.ValidateOpts{
+			Digits:    opts.Digits,
+			Algorithm: opts.Algorithm,
+		})
+
+		if err != nil {
+			return false, err
+		}
+
+		if rv == true {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+
+// ValidateCustom validates an HOTP with customizable options. Most users should
+// use Validate().
+func ValidateCustom(passcode string, counter uint64, secret string, opts ValidateOpts) (bool, error) {
+	passcode = strings.TrimSpace(passcode)
+
+	if len(passcode) != opts.Digits.Length() {
+		return false, otp.ErrValidateInputInvalidLength
+	}
+
+	otpstr, err := GenerateCodeCustom(secret, counter, opts)
+	if err != nil {
+		return false, err
+	}
+
+	if subtle.ConstantTimeCompare([]byte(otpstr), []byte(passcode)) == 1 {
+		return true, nil
+	}
+
+	return false, nil
+}
+```
+- 因为证明方和校验方都是基于时间来计算OTP，如果证明方在一个时间片段的最后时刻发送OTP，在请求达到校验方时，已经进入下一个时间片段，如果校验方使用当前时间来计算OTP，肯定会匹配失败，这样会导致一定的失败率，影响可用性。
+- 校验方应该不仅仅以接收请求的时间，还应该用上一个时间片段来计算TOTP，增强容错性。不过，容错窗口越长，被攻击风险越高，“后向兼容”一般推荐不超过一个时间片段。
+- 其中opts.Skew便是这个向后兼容性的设置，如果opts.Skew被设置为1，则有效的code码包括当前code码，前一个code码以及下一个code码。
+
