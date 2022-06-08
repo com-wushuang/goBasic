@@ -198,3 +198,6 @@ func ValidateCustom(passcode string, counter uint64, secret string, opts Validat
 - 校验方应该不仅仅以接收请求的时间，还应该用上一个时间片段来计算TOTP，增强容错性。不过，容错窗口越长，被攻击风险越高，“后向兼容”一般推荐不超过一个时间片段。
 - 其中opts.Skew便是这个向后兼容性的设置，如果opts.Skew被设置为1，则有效的code码包括当前code码，前一个code码以及下一个code码。
 
+## 参考
+https://bg6cq.github.io/ITTS/security/mfa/
+https://bbs.huaweicloud.com/blogs/205528
