@@ -94,5 +94,23 @@ Events:
 ![roll_up_flow](https://github.com/com-wushuang/goBasic/blob/main/image/roll_up_flow.webp)
 - `Deployment` 的控制器，实际上控制的是 `ReplicaSet` 的数目，以及每个 `ReplicaSet` 的属性
 - 而一个应用的版本，对应的正是一个 `ReplicaSet`,这个版本应用的 `Pod` 数量，则由 `ReplicaSet` 通过它自己的控制器`（ReplicaSet Controller）`来保证
-### 滚动更新的优点
+- 通过这样的多个 `ReplicaSet` 对象，`Kubernetes` 项目就实现了对多个“应用版本”的描述。
 
+### 滚动更新的优点
+- 比如，在升级刚开始的时候，集群里只有 1 个新版本的 `Pod`。如果这时，新版本 `Pod` 有问题启动不起来，那么"滚动更新"就会停止，从而允许开发和运维人员介入
+- 而在这个过程中，由于应用本身还有两个旧版本的 `Pod` 在线，所以服务并不会受到太大的影响
+- 当然，这也就要求你一定要使用 `Pod` 的 `Health Check` 机制检查应用的运行状态，而不是简单地依赖于容器的 `Running` 状态。要不然的话，虽然容器已经变成 `Running` 了，但服务很有可能尚未启动，"滚动更新"的效果也就达不到了
+- 而为了进一步保证服务的连续性，`Deployment Controller` 还会确保，在任何时间窗口内，只有指定比例的 `Pod` 处于离线状态。同时，它也会确保，在任何时间窗口内，只有指定比例的新 `Pod` 被创建出来。这两个比例的值都是可以配置的，默认都是 `DESIRED` 值的 `25%`
+- 所以，在上面这个 `Deployment` 的例子中，它有 3 个 `Pod` 副本，那么控制器在"滚动更新"的过程中永远都会确保至少有 2 个 `Pod` 处于可用状态，至多只有 4 个 `Pod` 同时存在于集群中。这个策略，是 `Deployment` 对象的一个字段，名叫 `RollingUpdateStrategy`
+
+### 滚动更新相关命令
+```shell
+kubectl rollout undo # 撤销上一次的 rollout
+kubectl status # 显示 rollout 的状态
+kubectl history # 显示 rollout 历史
+```
+回滚到指定版本:
+```shell
+$ kubectl rollout undo deployment/nginx-deployment --to-revision=2
+deployment.extensions/nginx-deployment
+```
