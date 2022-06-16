@@ -114,3 +114,19 @@ kubectl history # 显示 rollout 历史
 $ kubectl rollout undo deployment/nginx-deployment --to-revision=2
 deployment.extensions/nginx-deployment
 ```
+
+### 滚动更新的版本数目控制
+- 对 `Deployment` 进行的每一次更新操作，都会生成一个新的 `ReplicaSet` 对象，是不是有些多余，甚至浪费资源呢？
+- 没错。所以，`Kubernetes` 项目还提供了一个指令，使得我们对 `Deployment` 的多次更新操作，最后只生成一个 `ReplicaSet`
+- 在更新 `Deployment` 前，你要先执行一条 `kubectl rollout pause` 指令
+```shell
+$ kubectl rollout pause deployment/nginx-deployment
+deployment.extensions/nginx-deployment paused
+```
+- 此后 `Deployment` 正处于"暂停"状态，所以我们对 `Deployment` 的所有修改，都不会触发新的"滚动更新"，也不会创建新的 `ReplicaSet`
+- 而等到我们对 `Deployment` 修改操作都完成之后，只需要再执行一条 `kubectl rollout resume` 指令，就可以把这个 `Deployment` "恢复"回来：
+```shell
+$ kubectl rollout resume deployment/nginx-deployment
+deployment.extensions/nginx-deployment resumed
+```
+- 同时，`Deployment` 对象有一个字段，叫作 `spec.revisionHistoryLimit`，就是 `Kubernetes` 为 `Deployment` 保留的"历史版本"个数。所以，如果把它设置为 `0`，你就再也不能做回滚操作了
