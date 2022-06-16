@@ -83,7 +83,6 @@ web-1
 ```
 - 然后，在这个 `Pod` 的容器里面，我们尝试用 `nslookup` 命令，解析一下 `Pod` 对应的 `Headless Service`：
 ```shell
-
 $ kubectl run -i --tty --image busybox:1.28.4 dns-test --restart=Never --rm /bin/sh
 $ nslookup web-0.nginx
 Server:    10.0.0.10
@@ -103,7 +102,6 @@ Address 1: 10.244.2.7
 - 这时候，当我们把这两个 `Pod` 删除之后，`Kubernetes` 会按照原先编号的顺序，创建出了两个新的 `Pod`。并且，`Kubernetes` 依然为它们分配了与原来相同的"网络身份"：`web-0.nginx` 和 `web-1.nginx`
 - 通过这种严格的对应规则，`StatefulSet` 就保证了 `Pod` 网络标识的稳定性
 ```shell
-
 $ kubectl run -i --tty --image busybox dns-test --restart=Never --rm /bin/sh 
 $ nslookup web-0.nginx
 Server:    10.0.0.10
@@ -177,9 +175,25 @@ www-web-1   Bound     pvc-15c79307-b507-11e6-932f-42010a800002   1Gi        RWO 
 - 新的 `Pod` 就可以挂载到旧 `Pod` 对应的那个 `Volume`，并且获取到保存在 `Volume` 里的数据
 - 通过这种方式，`Kubernetes` 的 `StatefulSet` 就实现了对应用存储状态的管理
 
+### statefulSet 的滚动更新
+- 只要修改 `StatefulSet` 的 `Pod` 模板，就会自动触发"滚动更新":
+```shell
+$ kubectl patch statefulset mysql --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"mysql:5.7.23"}]'
+statefulset.apps/mysql patched
+```
+- `StatefulSet Controller` 就会按照与 `Pod` 编号相反的顺序，从最后一个 `Pod` 开始，逐一更新这个 `StatefulSet` 管理的每个 `Pod`。而如果更新发生了错误，这次"滚动更新"就会停止。
+- 此外，`StatefulSet` 的"滚动更新"还允许我们进行更精细的控制，比如金丝雀发布（Canary Deploy）或者灰度发布，这意味着应用的多个实例中被指定的一部分不会被更新到最新的版本。
+- 正是 `StatefulSet` 的 `spec.updateStrategy.rollingUpdate` 的 `partition` 字段。
+- StatefulSet 的 partition 字段设置为 2：
+```shell
+$ kubectl patch statefulset mysql -p '{"spec":{"updateStrategy":{"type":"RollingUpdate","rollingUpdate":{"partition":2}}}}'
+statefulset.apps/mysql patched
+```
+- 这样，我就指定了当 `Pod` 模板发生变化的时候，比如 `MySQL` 镜像更新到 `5.7.23`，那么只有序号大于或者等于 `2` 的 `Pod` 会被更新到这个版本。并且，如果你删除或者重启了序号小于 2 的 `Pod`，等它再次启动后，也会保持原先的 `5.7.2` 版本，绝不会被升级到 `5.7.23` 版本。
+
 ### 总结
-**首先，`StatefulSet` 的控制器直接管理的是 `Pod`。** 这是因为，`StatefulSet` 里的不同 `Pod` 实例，不再像 `ReplicaSet` 中那样都是完全一样的，而是有了细微区别的。比如，每个 `Pod` 的 `hostname`、名字等都是不同的、携带了编号的。而 `StatefulSet` 区分这些实例的方式，就是通过在 `Pod` 的名字里加上事先约定好的编号。
+- **首先，`StatefulSet` 的控制器直接管理的是 `Pod`。** 这是因为，`StatefulSet` 里的不同 `Pod` 实例，不再像 `ReplicaSet` 中那样都是完全一样的，而是有了细微区别的。比如，每个 `Pod` 的 `hostname`、名字等都是不同的、携带了编号的。而 `StatefulSet` 区分这些实例的方式，就是通过在 `Pod` 的名字里加上事先约定好的编号。
 
-**其次，`Kubernetes` 通过 `Headless Service`，为这些有编号的 `Pod`，在 `DNS` 服务器中生成带有同样编号的 `DNS` 记录。** 只要 `StatefulSet` 能够保证这些 `Pod` 名字里的编号不变，那么 `Service` 里类似于 `web-0.nginx.default.svc.cluster.local` 这样的 `DNS` 记录也就不会变，而这条记录解析出来的 `Pod` 的 `IP` 地址，则会随着后端 `Pod` 的删除和再创建而自动更新。这当然是 `Service` 机制本身的能力，不需要 `StatefulSet` 操心。
+- **其次，`Kubernetes` 通过 `Headless Service`，为这些有编号的 `Pod`，在 `DNS` 服务器中生成带有同样编号的 `DNS` 记录。** 只要 `StatefulSet` 能够保证这些 `Pod` 名字里的编号不变，那么 `Service` 里类似于 `web-0.nginx.default.svc.cluster.local` 这样的 `DNS` 记录也就不会变，而这条记录解析出来的 `Pod` 的 `IP` 地址，则会随着后端 `Pod` 的删除和再创建而自动更新。这当然是 `Service` 机制本身的能力，不需要 `StatefulSet` 操心。
 
-**最后，`StatefulSet` 还为每一个 `Pod` 分配并创建一个同样编号的 `PVC`。** 这样，`Kubernetes` 就可以通过 `Persistent Volume` 机制为这个 `PVC` 绑定上对应的 `PV`，从而保证了每一个 `Pod` 都拥有一个独立的 `Volume`。在这种情况下，即使 `Pod` 被删除，它所对应的 `PVC` 和 `PV` 依然会保留下来。所以当这个 `Pod` 被重新创建出来之后，`Kubernetes` 会为它找到同样编号的 `PVC`，挂载这个 `PVC` 对应的 `Volume`，从而获取到以前保存在 `Volume` 里的数据。这么一看，原本非常复杂的 `StatefulSet`，是不是也很容易理解了呢？
+- **最后，`StatefulSet` 还为每一个 `Pod` 分配并创建一个同样编号的 `PVC`。** 这样，`Kubernetes` 就可以通过 `Persistent Volume` 机制为这个 `PVC` 绑定上对应的 `PV`，从而保证了每一个 `Pod` 都拥有一个独立的 `Volume`。在这种情况下，即使 `Pod` 被删除，它所对应的 `PVC` 和 `PV` 依然会保留下来。所以当这个 `Pod` 被重新创建出来之后，`Kubernetes` 会为它找到同样编号的 `PVC`，挂载这个 `PVC` 对应的 `Volume`，从而获取到以前保存在 `Volume` 里的数据。这么一看，原本非常复杂的 `StatefulSet`，是不是也很容易理解了呢？
