@@ -6,7 +6,7 @@
 - `host-gw`
 - `UDP`
 
-### UDP模式
+### UDP实现
 **TUN设备**
 - 在 `Linux` 中，`TUN` 设备是一种工作在三层（`Network Layer`）的虚拟网络设备。`TUN` 设备的功能非常简单，即：在操作系统内核和用户应用程序之间传递 `IP` 包。
 - 当操作系统将一个 `IP` 包发送给 `flannel0` 设备之后，`flannel0` 就会把这个 `IP` 包，交给创建这个设备的应用程序，也就是 `Flannel` 进程。这是一个从内核态（`Linux` 操作系统）向用户态（`Flannel` 进程）的流动方向。
@@ -83,3 +83,67 @@ $ dockerd --bip=$FLANNEL_SUBNET ...
 - 这就好比，`Flannel` 在不同宿主机上的两个容器之间打通了一条"隧道"，使得这两个容器可以直接使用 `IP` 地址进行通信，而无需关心容器和宿主机的分布情况。
 
 **缺陷**
+
+内核态和用户态间的切换
+
+- 实际上，相比于两台宿主机之间的直接通信，基于 `Flannel UDP` 模式的容器通信多了一个额外的步骤，即 `flanneld` 的处理过程。
+- 而这个过程，由于使用到了 `flannel0` 这个 `TUN` 设备，仅在发出 `IP` 包的过程中，就需要经过三次用户态与内核态之间的数据拷贝，如下所示：
+![flannel_udp_weakness](https://github.com/com-wushuang/goBasic/blob/main/image/flannel_udp_weakness.webp)
+- 第一次，用户态的容器进程发出的 `IP` 包经过 `docker0` 网桥进入内核态；
+- 第二次，`IP` 包根据路由表进入 `TUN`（`flannel0`）设备，从而回到用户态的 flanneld 进程；
+- 第三次，`flanneld` 进行 `UDP` 封包之后重新进入内核态，将 `UDP` 包通过宿主机的 `eth0` 发出去。
+
+数据的封装和解封装
+
+- 此外，我们还可以看到，`Flannel` 进行 `UDP` 封装（`Encapsulation`）和解封装（`Decapsulation`）的过程，也都是在用户态完成的。
+- 在 `Linux` 操作系统中，上述这些上下文切换和用户态操作的代价其实是比较高的，这也正是造成 `Flannel UDP` 模式性能不好的主要原因。
+
+总结
+- 所以说，我们在进行系统级编程的时候，有一个非常重要的优化原则，就是要减少用户态到内核态的切换次数，并且把核心的处理逻辑都放在内核态进行。这也是为什么，`Flannel` 后来支持的 `VXLAN` 模式，逐渐成为了主流的容器网络方案的原因。
+
+
+### VXLAN实现
+**VXLAN技术基础**
+- `VXLAN`，即 `Virtual Extensible LAN`（虚拟可扩展局域网），是 `Linux` 内核本身就支持的一种网络虚似化技术。
+- `VXLAN` 可以完全在内核态实现上述封装和解封装的工作，从而通过与前面相似的"隧道"机制，构建出覆盖网络（`Overlay Network`）。
+- `VXLAN` 的覆盖网络的设计思想是：在现有的三层网络之上，"覆盖"一层虚拟的、由内核 `VXLAN` 模块负责维护的二层网络，使得连接在这个 `VXLAN` 二层网络上的"主机"（虚拟机或者容器都可以）之间，可以像在同一个局域网（`LAN`）里那样自由通信。
+- 为了能够在二层网络上打通"隧道"， `VXLAN` 会在宿主机上设置一个特殊的网络设备作为"隧道"的两端。这个设备就叫作 `VTEP`，即：`VXLAN Tunnel End Point`（虚拟隧道端点）。
+- 而 `VTEP` 设备的作用，其实跟前面的 `flanneld` 进程非常相似。只不过，它进行封装和解封装的对象，是二层数据帧（`Ethernet frame`）；
+- 而且这个工作的执行流程，全部是在内核里完成的（因为 `VXLAN` 本身就是 `Linux` 内核中的一个模块）。
+![flannel_vxlan](https://github.com/com-wushuang/goBasic/blob/main/image/flannel_vxlan.webp)
+- 每台宿主机上名叫 `flannel.1` 的设备，就是 `VXLAN` 所需的 `VTEP` 设备，它既有 `IP` 地址，也有 `MAC` 地址。
+
+**过程**
+- `container-1` 的 `IP` 地址是 `10.1.15.2`，要访问的 `container-2` 的 `IP` 地址是 `10.1.16.3`。
+- 与 `UDP` 模式的流程类似，当 `container-1` 发出请求之后，这个目的地址是 `10.1.16.3` 的 `IP` 包，会先出现在 `docker0` 网桥，然后被路由到本机 `flannel.1` 设备进行处理。也就是说，来到了"隧道"的入口。为了方便叙述，把这个 `IP` 包称为"原始 IP 包"。
+- 为了能够将 "原始 IP 包" 封装并且发送到正确的宿主机，`VXLAN` 就需要找到这条"隧道"的出口，即：目的宿主机的 `VTEP` 设备。
+- 而这个设备的信息，正是每台宿主机上的 `flanneld` 进程负责维护的:
+- 当 `Node 2` 启动并加入 `Flannel` 网络之后，在 `Node 1`（以及所有其他节点）上，`flanneld` 就会添加一条如下所示的路由规则：
+```shell
+$ route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+...
+10.1.16.0       10.1.16.0       255.255.255.0   UG    0      0        0 flannel.1
+```
+- 这条规则的意思是：凡是发往 `10.1.16.0/24` 网段的 `IP` 包，都需要经过 `flannel.1` 设备发出，并且，它最后被发往的网关地址是：`10.1.16.0`。
+- `10.1.16.0` 正是 `Node 2` 上的 `VTEP` 设备（也就是 `flannel.1` 设备）的 `IP` 地址。
+- `Node 1` 和 `Node 2` 上的 `flannel.1` 设备分别称为"源 `VTEP` 设备"和"目的 `VTEP` 设备"。
+- 而这些 `VTEP` 设备之间，就需要想办法组成一个虚拟的二层网络，即：通过二层数据帧进行通信。
+- "源 `VTEP` 设备"收到"原始 `IP` 包"后，就要想办法把"原始 `IP` 包"加上一个目的 `MAC` 地址，封装成一个二层数据帧，然后发送给"目的 `VTEP` 设备"（当然，这么做还是因为这个 `IP` 包的目的地址不是本机）。
+- 这里需要解决的问题就是："目的 `VTEP` 设备"的 `MAC` 地址是什么？
+- 根据前面的路由记录，我们已经知道了"目的 `VTEP` 设备"的 `IP` 地址。而要根据三层 `IP` 地址查询对应的二层 `MAC` 地址，这正是 `ARP`（Address Resolution Protocol ）表的功能。而这里要用到的 `ARP` 记录，也是 `flanneld` 进程在 `Node 2` 节点启动时，自动添加在 `Node 1` 上的。如下所示：
+```shell
+# 在Node 1上
+$ ip neigh show dev flannel.1
+10.1.16.0 lladdr 5e:f8:4f:00:e3:37 PERMANENT
+```
+- 有了这个"目的 `VTEP` 设备"的 `MAC` 地址，`Linux` 内核就可以开始二层封包工作了。这个二层帧的格式，如下所示：
+![flannel_frame](https://github.com/com-wushuang/goBasic/blob/main/image/flannel_frame.webp)
+- 上面提到的这些 VTEP 设备的 MAC 地址，对于宿主机网络来说并没有什么实际意义。所以上面封装出来的这个数据帧，并不能在我们的宿主机二层网络里传输。为了方便叙述，我们把它称为“内部数据帧”（Inner Ethernet Frame）。
+- Linux 内核还需要再把“内部数据帧”进一步封装成为宿主机网络里的一个普通的数据帧，好让它“载着”“内部数据帧”，通过宿主机的 eth0 网卡进行传输。
+- 我们把这次要封装出来的、宿主机对应的数据帧称为“外部数据帧”（Outer Ethernet Frame）。
+- Linux 内核会在“内部数据帧”前面，加上一个特殊的 VXLAN 头，用来表示这个“乘客”实际上是一个 VXLAN 要使用的数据帧。
+- 而这个 VXLAN 头里有一个重要的标志叫作 VNI，它是 VTEP 设备识别某个数据帧是不是应该归自己处理的重要标识。而在 Flannel 中，VNI 的默认值是 1，这也是为何，宿主机上的 VTEP 设备都叫作 flannel.1 的原因，这里的“1”，其实就是 VNI 的值。
+- 然后，Linux 内核会把这个数据帧封装进一个 UDP 包里发出去。
+- 跟 UDP 模式类似，在宿主机看来，它会以为自己的 flannel.1 设备只是在向另外一台宿主机的 flannel.1 设备，发起了一次普通的 UDP 链接。它哪里会知道，这个 UDP 包里面，其实是一个完整的二层数据帧。
