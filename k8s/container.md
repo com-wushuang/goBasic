@@ -102,3 +102,24 @@ docker0  8000.0242d8e4dfc1 no  veth9c02e56
 - 所以，`nginx-2` 容器看到的情况是，它自己的 `eth0` 网卡上出现了流入的数据包。这样，`nginx-2` 的网络协议栈就会对请求进行处理，最后将响应（`Pong`）返回到 `nginx-1`。
 - 以上，就是同一个宿主机上的不同容器通过 docker0 网桥进行通信的流程了:
   ![docker_ping](https://github.com/com-wushuang/goBasic/blob/main/image/docker_ping.webp)
+
+**同宿主机其他进程和容器通信原理**
+- 与之类似地，当你在一台宿主机上，访问该宿主机上的容器的 `IP` 地址时，这个请求的数据包，也是先根据路由规则到达 `docker0` 网桥，然后被转发到对应的 `Veth Pair` 设备，最后出现在容器里。这个过程的示意图，如下所示：
+![thread_docker_communicate](https://github.com/com-wushuang/goBasic/blob/main/image/thread_docker_communicate.webp)
+
+**容器和另一台宿主机互相通信原理**
+- 当一个容器试图连接到另外一个宿主机时，比如：`ping 10.168.0.3`，它发出的请求数据包，首先经过 `docker0` 网桥出现在宿主机上。然后根据宿主机的路由表里的直连路由规则（`10.168.0.0/24 via eth0`），对 `10.168.0.3` 的访问请求就会交给宿主机的 `eth0` 处理。
+- 所以接下来，这个数据包就会经宿主机的 `eth0` 网卡转发到宿主机网络上，最终到达 `10.168.0.3` 对应的宿主机上。当然，这个过程的实现要求这两台宿主机本身是连通的。这个过程的示意图，如下所示：
+![docker_thread_communicate](https://github.com/com-wushuang/goBasic/blob/main/image/docker_thread_communicate.webp)
+
+
+**不同宿主机容器间的互相通信原理**
+- 这个问题，其实就是容器的"跨主通信"问题。
+- 在 Docker 的默认配置下，一台宿主机上的 `docker0` 网桥，和其他宿主机上的 `docker0` 网桥，没有任何关联，它们互相之间也没办法连通。所以，连接在这些网桥上的容器，自然也没办法进行通信了。
+- 不过，万变不离其宗。如果我们通过软件的方式，创建一个整个集群"公用"的网桥，然后把集群里的所有容器都连接到这个网桥上，不就可以相互通信了吗？说得没错。这样一来，我们整个集群里的容器网络就会类似于下图所示的样子：
+  ![overlay_network](https://github.com/com-wushuang/goBasic/blob/main/image/overlay_network.webp)
+- 而这个 `Overlay Network` 本身，可以由每台宿主机上的一个"特殊网桥"共同组成。比如，当 `Node 1` 上的 `Container 1` 要访问 `Node 2` 上的 `Container 3` 的时候，`Node 1` 上的"特殊网桥"在收到数据包之后，能够通过某种方式，把数据包发送到正确的宿主，比如 Node 2 上。
+- 而 `Node 2` 上的"特殊网桥"在收到数据包后，也能够通过某种方式，把数据包转发给正确的容器，比如 `Container 3`。
+
+**总结**
+- 被限制在 `Network Namespace` 里的容器进程，实际上是通过 `Veth Pair 设备 + 宿主机网桥` 的方式，实现了跟同其他容器的数据交换。
