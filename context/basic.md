@@ -1,10 +1,10 @@
 ## context 是什么
 
-在 Go1.7 加入到的标准库context，它定义了Context类型，专门用来简化 对于处理单个请求的多个 goroutine 之间与请求域的数据、取消信号、超时控制、截止时间等相关操作。本质上是一个同步工具。
+在 `Go1.7` 加入到的标准库 `context`，它定义了 `Context` 类型，专门用来简化 对于处理单个请求的多个 `goroutine` 之间与请求域的数据、取消信号、超时控制、截止时间等相关操作。本质上是一个同步工具。
 
 ## 接口定义
 
-context.Context是一个接口，该接口定义了四个需要实现的方法。具体签名如下：
+`context.Context` 是一个接口，该接口定义了四个需要实现的方法。具体签名如下：
 
 ```go
 type Context interface {
@@ -19,14 +19,15 @@ Value(key interface{}) interface{} // 该方法仅用于传递跨API和进程间
 
 **顶级context**
 
-- Go内置两个函数：`Background()`和`TODO()`，这两个函数分别返回一个实现了`Context`接口的`background`和`todo`
+- `Go` 内置两个函数：`Background()`和`TODO()`，这两个函数分别返回一个实现了`Context`接口的`background`和`todo`
   ,我们代码中最开始都是以这两个内置的上下文对象作为最顶层的`parent context`，衍生出更多的子上下文对象。
 - `Background()`主要用于`main`函数、初始化以及测试代码中，作为`Context`这个树结构的最顶层的`Context`，也就是`根Context`。
-- `TODO()`，它目前还不知道具体的使用场景，如果我们不知道该使用什么Context的时候，可以使用这个。
-- `background`和`todo`本质上都是`emptyCtx`结构体类型，是一个不可取消，没有设置截止时间，没有携带任何值的Context。
+- `TODO()`，它目前还不知道具体的使用场景，如果我们不知道该使用什么 `Context` 的时候，可以使用这个。
+- `background`和`todo`本质上都是`emptyCtx`结构体类型，是一个不可取消，没有设置截止时间，没有携带任何值的 `Context`。
 
 **With系列函数**
-此外，`context`包中还定义了四个With系列函数,用于从顶级`context`衍生子`context`
+
+此外，`context`包中还定义了四个 `With` 系列函数,用于从顶级`context`衍生子`context`
 
 ```go
 func WithCancel(parent Context) (ctx Context, cancel CancelFunc)
@@ -125,6 +126,7 @@ func main() {
 ```
 
 **截止时间**
+
 和超时控制的方式很类似
 ```go
 func main() {
@@ -161,7 +163,7 @@ func main() {
 ```
 
 ## 超时的另外一种实现方式
-我们可以使用time包实现超时
+我们可以使用 `time` 包实现超时
 ```go
 package main
 
