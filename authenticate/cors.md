@@ -2,7 +2,7 @@
 
 运行在 `http://domain-a.com` 的JavaScript代码使用[`XMLHttpRequest`](https://developer.mozilla.org/zh-CN/docs/Web/API/XMLHttpRequest)来发起一个到 `https://domain-b.com/data.json` 的请求。
 
-出于安全性，浏览器限制脚本内发起的跨源HTTP请求。 XMLHttpRequest遵循同源策略，这意味着应用程序只能从加载应用程序的同一个域请求HTTP资源，除非响应报文包含了正确CORS响应头。
+出于安全性，浏览器限制脚本内发起的跨源 `HTTP` 请求。 `XMLHttpRequest` 遵循同源策略，这意味着应用程序只能从加载应用程序的同一个域请求 `HTTP` 资源，除非响应报文包含了正确 `CORS` 响应头。
 
 ## 简介
 
@@ -12,7 +12,7 @@
 
 - 前文提到的由 [`XMLHttpRequest`](https://developer.mozilla.org/zh-CN/docs/Web/API/XMLHttpRequest) 或 [Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) 发起的跨源 HTTP 请求
 - Web 字体 (CSS 中通过` @font-face `使用跨源字体资源)。网站可以发布 TrueType 字体资源，并只允许已授权网站进行跨站调用
-- 使用 `drawImage` 将 Images/video 画面绘制到 canvas
+- 使用 `drawImage` 将 `Images/video` 画面绘制到 `canvas`
 
 ## 访问控制场景
 
