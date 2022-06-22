@@ -45,8 +45,8 @@ type waitq struct {
 ## 如何优雅的关闭channel
 **不优雅的关闭方式**
 
-在不改变 channel 自身状态的情况下，无法获知一个 channel 是否关闭:
-- 因为对于一个channel的操作只有三种:发送、接受、关闭
+在不改变 `channel` 自身状态的情况下，无法获知一个 `channel` 是否关闭:
+- 因为对于一个 `channel` 的操作只有三种:`发送`、`接受`、`关闭`
 - 那么我们只能依赖于这三种方式获取channel是否关闭
 - 1.关闭一个 `closed channel` 会导致 `panic`，不可行
 - 2.向一个 `closed channel` 发送数据会导致 `panic`，也不可行
@@ -82,12 +82,12 @@ func main() {
 ----
 **优雅的方式**
 
-有一条广泛流传的关闭 channel 的原则：
+有一条广泛流传的关闭 `channel` 的原则：
 >don’t close a channel from the receiver side and don’t close a channel if the channel has multiple concurrent senders.
 > (不要从一个 receiver 侧关闭 channel，也不要在有多个 sender 时，关闭 channel)
 
-- 比较好理解，向 channel 发送元素的就是 sender，因此 sender 可以决定何时不发送数据，并且关闭 channel。
-- 但是如果有多个 sender，某个 sender 同样没法确定其他 sender 的情况，这时也不能贸然关闭 channel。
+- 比较好理解，向 `channel` 发送元素的就是 `sender`，因此 `sender` 可以决定何时不发送数据，并且关闭 `channel`。
+- 但是如果有多个 `sender`，某个 `sender` 同样没法确定其他 `sender` 的情况，这时也不能贸然关闭 `channel`。
 
 ---
 **最佳实践**
@@ -248,13 +248,13 @@ toStop := make(chan string, NumReceivers + NumSenders)
 可以看到，这里同样没有真正关闭 dataCh，原样同第 3 种情况。
 
 ## channel是如何产生内存泄漏的
-- 泄漏的原因是 goroutine 操作 channel 后，处于发送或接收阻塞状态，而 channel 处于满或空的状态，一直得不到改变。
-- 同时，垃圾回收器也不会回收此类资源，进而导致 gouroutine 会一直处于等待队列中，不见天日。
-- 另外，程序运行过程中，对于一个 channel，如果没有任何 goroutine 引用了，gc 会对其进行回收操作，不会引起内存泄漏。
+- 泄漏的原因是 `goroutine` 操作 `channel` 后，处于发送或接收阻塞状态，而 `channel` 处于满或空的状态，一直得不到改变。
+- 同时，垃圾回收器也不会回收此类资源，进而导致 `gouroutine` 会一直处于等待队列中，不见天日。
+- 另外，程序运行过程中，对于一个 `channel`，如果没有任何 `goroutine` 引用了，`gc` 会对其进行回收操作，不会引起内存泄漏。
 
 ## channel有哪些应用
 `Channel` 和 `goroutine` 的结合是 `Go` 并发编程的大杀器。 而 `Channel` 的实际应用也经常让人眼前一亮，通过与 `select`，`context`，`timer` 等结合，它能实现各种各样的功能。所以在学习`channel`知识的时候应该结合这几部分知识一起学习
-- 停止信号: `channel` 用于停止信号的场景还是挺多的，经常是关闭某个 channel 或者向 channel 发送一个元素，使得接收 channel 的那一方获知道此信息，进而做一些其他的操作。例如，之前讲到的如何优雅的关闭`channel`
+- 停止信号: `channel` 用于停止信号的场景还是挺多的，经常是关闭某个 `channel` 或者向 `channel` 发送一个元素，使得接收 `channel` 的那一方获知道此信息，进而做一些其他的操作。例如，之前讲到的如何优雅的关闭`channel`
 - 任务定时: 与 `timer` 结合，一般有两种玩法: 实现超时控制，实现定期执行某个任务。
 ```go
 // 用法1:有时候，需要执行某项操作，但又不想它耗费太长时间，上一个定时器就可以 
@@ -307,7 +307,7 @@ func worker(taskCh <-chan int) {
 	}
 }
 ```
-- 控制并发数:有时需要定时执行几百个任务，例如每天定时按城市来执行一些离线计算的任务。但是并发数又不能太高，因为任务执行过程依赖第三方的一些资源，对请求的速率有限制。这时就可以通过 channel 来控制并发数。
+- 控制并发数:有时需要定时执行几百个任务，例如每天定时按城市来执行一些离线计算的任务。但是并发数又不能太高，因为任务执行过程依赖第三方的一些资源，对请求的速率有限制。这时就可以通过 `channel` 来控制并发数。
 ```go
 var limit = make(chan int, 3) // channel 用来
 
