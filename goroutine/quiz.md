@@ -1,36 +1,36 @@
 ## goroutine和线程的区别
 - 内存占用:
-  - 创建一个 goroutine 的栈内存消耗为 2 KB，实际运行过程中，如果栈空间不够用，会自动进行扩容。
-  - 创建一个 thread 则需要消耗 1 MB 栈内存，而且还需要一个被称为 “a guard page” 的区域用于和其他 thread 的栈空间进行隔离。
+  - 创建一个 `goroutine` 的栈内存消耗为 `2 KB`，实际运行过程中，如果栈空间不够用，会自动进行扩容。
+  - 创建一个 `thread` 则需要消耗 `1 MB` 栈内存，而且还需要一个被称为 “a guard page” 的区域用于和其他 `thread` 的栈空间进行隔离。
 - 创建和销毀:
-  - Thread 创建和销毀都会有巨大的消耗，因为要和操作系统打交道，是`内核级的`，通常解决的办法就是线程池。
-  -  goroutine 因为是由 Go runtime 负责管理的，创建和销毁的消耗非常小，是`用户级`。
+  - `Thread` 创建和销毀都会有巨大的消耗，因为要和操作系统打交道，是`内核级的`，通常解决的办法就是线程池。
+  -  `goroutine` 因为是由 `Go runtime` 负责管理的，创建和销毁的消耗非常小，是`用户级`。
 
 - 切换
-  - 当 threads 切换时，需要保存各种寄存器，以便将来恢复
-  - goroutines 切换只需保存三个寄存器：`Program Counter`, `Stack Pointer` and `BP`。
+  - 当 `threads` 切换时，需要保存各种寄存器，以便将来恢复
+  - `goroutines` 切换只需保存三个寄存器：`Program Counter`, `Stack Pointer` and `BP`。
 
 ## 什么是 scheduler
-- Go 程序的执行由两层组成：Go Program，Runtime，即用户程序和运行时。
+- Go 程序的执行由两层组成：`Go Program`，`Runtime`，即用户程序和运行时。
 - 它们之间通过函数调用来实现内存管理、channel 通信、goroutines 创建等功能。
 - 用户程序进行的系统调用都会被 Runtime 拦截，以此来帮助它进行调度以及垃圾回收相关的工作。
 ![scheduler](https://github.com/com-wushuang/goBasic/blob/main/image/scheduler.png)
 
 - Go `scheduler` 可以说是 Go `runtime`的一个最重要的部分了。
-- Runtime 维护所有的 `goroutines`，并通过 `scheduler` 来进行调度。
+- `Runtime` 维护所有的 `goroutines`，并通过 `scheduler` 来进行调度。
 - `Goroutines` 和 `threads` 是独立的，但是 `goroutines` 要依赖 `threads` 才能执行。
 - Go 程序执行的高效和 `scheduler` 的调度是分不开的。
 
 ## scheduler 底层原理
-实际上在操作系统看来，所有的程序都是在执行多线程。`将 goroutines 调度到线程上执行，仅仅是 runtime 层面的一个概念，在操作系统之上的层面。`有三个基础的结构体来实现 goroutines 的调度。g，m，p(GMP模型在数据结构上的支持):
-- `g` 代表一个 `goroutine`，它包含：表示 goroutine 栈的一些字段，指示当前 goroutine 的状态，指示当前运行到的指令地址，也就是 PC 值。
-- `m` 表示内核线程，包含正在运行的 goroutine 等字段。
-- `p` 代表一个虚拟的 `Processor`，它维护一个处于 Runnable 状态的 g 队列，m 需要获得 p 才能运行 g。
+实际上在操作系统看来，所有的程序都是在执行多线程。将 `goroutines` 调度到线程上执行，仅仅是 `runtime` 层面的一个概念，在操作系统之上的层面。有三个基础的结构体来实现 `goroutines` 的调度。`g，m，p`(GMP模型在数据结构上的支持):
+- `g` 代表一个 `goroutine`，它包含：表示 `goroutine` 栈的一些字段，指示当前 `goroutine` 的状态，指示当前运行到的指令地址，也就是 `PC` 值。
+- `m` 表示内核线程，包含正在运行的 `goroutine` 等字段。
+- `p` 代表一个虚拟的 `Processor`，它维护一个处于 `Runnable` 状态的 `g` 队列，`m` 需要获得 `p` 才能运行 `g`。
 
 ### G
-- 主要保存 goroutine 的一些状态信息以及 CPU 的一些寄存器的值。
-- 当 goroutine 被调离 CPU 时，调度器负责把 CPU 寄存器的值保存在 g 对象的成员变量之中。
-- 当 goroutine 被调度起来运行时，调度器又负责把 g 对象的成员变量所保存的寄存器值恢复到 CPU 的寄存器。
+- 主要保存 `goroutine` 的一些状态信息以及 `CPU` 的一些寄存器的值。
+- 当 `goroutine` 被调离 `CPU` 时，调度器负责把 `CPU` 寄存器的值保存在 `g` 对象的成员变量之中。
+- 当 `goroutine` 被调度起来运行时，调度器又负责把 `g` 对象的成员变量所保存的寄存器值恢复到 `CPU` 的寄存器。
 ```go
 type g struct {
 
@@ -122,8 +122,8 @@ type gobuf struct {
 ```
 ### M
 - 取 `machine` 的首字母,代表一个工作线程(但也仅仅是代表，并不是真的系统线程)，或者说系统线程。
-- G 需要调度到 M 上才能运行，M 是真正工作的人。
-- 结构体 m 就是我们常说的 M，它保存了 M 自身使用的栈信息、当前正在 M 上执行的 G 信息、与之绑定的 P 信息。
+- `G` 需要调度到 `M` 上才能运行，`M` 是真正工作的人。
+- 结构体 `m` 就是我们常说的 `M`，它保存了 `M` 自身使用的栈信息、当前正在 `M` 上执行的 `G` 信息、与之绑定的 `P` 信息。
 ```go
 // m 代表工作线程，保存了自身使用的栈信息
 type m struct {
@@ -212,8 +212,8 @@ type m struct {
 ```
 
 ### P
-- 取 processor 的首字母，为 M 的执行提供“上下文”，保存 M 执行 G 时的一些资源，例如本地可运行 G 队列，memeory cache 等。
-- 一个 M 只有绑定 P 才能执行 goroutine，当 M 被阻塞时，整个 P 会被传递给其他 M ，或者说整个 P 被接管。
+- 取 `processor` 的首字母，为 `M` 的执行提供“上下文”，保存 `M` 执行 `G` 时的一些资源，例如本地可运行 `G` 队列，`memeory cache` 等。
+- 一个 `M` 只有绑定 `P` 才能执行 `goroutine`，当 `M` 被阻塞时，整个 `P` 会被传递给其他 `M` ，或者说整个 `P` 被接管。
 ```go
 // p 保存 go 运行时所必须的资源
 type p struct {
@@ -278,10 +278,10 @@ type p struct {
 ```
 
 ### goroutine 发生调度的时机
-- 键字 go: go 创建一个新的 `goroutine`，Go scheduler 会考虑调度。
-- GC: 由于进行 GC 的 `goroutine` 也需要在 M 上运行，因此肯定会发生调度。
-- 系统调用: 当 `goroutine` 进行系统调用时，会阻塞 M，所以它会被调度走，同时一个新的 `goroutine` 会被调度上来。
-- 内存同步访问: `atomic`，`mutex`，`channel` 操作等会使 `goroutine` 阻塞，因此会被调度走。等条件满足后（例如其他 goroutine 解锁了）还会被调度上来继续运行。
+- 键字 `go`: `go` 创建一个新的 `goroutine`，`Go scheduler` 会考虑调度。
+- `GC`: 由于进行 `GC` 的 `goroutine` 也需要在 `M` 上运行，因此肯定会发生调度。
+- 系统调用: 当 `goroutine` 进行系统调用时，会阻塞 `M`，所以它会被调度走，同时一个新的 `goroutine` 会被调度上来。
+- 内存同步访问: `atomic`，`mutex`，`channel` 操作等会使 `goroutine` 阻塞，因此会被调度走。等条件满足后（例如其他 `goroutine` 解锁了）还会被调度上来继续运行。
 
 ### go调度的生命周期
 ![golang_schedule_lifetime2](https://github.com/com-wushuang/goBasic/blob/main/image/golang_schedule_lifetime2.png)
@@ -290,7 +290,7 @@ type p struct {
 
 上面生命周期流程说明：
 - `runtime` 创建最初的线程 `m0` 和 `goroutine g0`，并把两者进行关联（`g0.m = m0`)
-- 调度器初始化：设置M最大数量，P个数，栈和内存出事，以及创建 GOMAXPROCS个P
+- 调度器初始化：设置M最大数量，P个数，栈和内存初始化，以及创建 GOMAXPROCS个P
 - 示例代码中的 `main` 函数是 `main.main`，`runtime` 中也有 1 个 `main` 函数 —— `runtime.main`，代码经过编译后，`runtime.main` 会调用 `main.main`，程序启动时会为 `runtime.main` 创建 `goroutine`，称它为 `main goroutine` 吧，然后把 `main goroutine` 加入到 P 的本地队列
 - 启动 `m0`，`m0` 已经绑定了 `P`，会从 `P` 的本地队列获取 `G`，获取到 `main goroutine`。
 - `G` 拥有栈，`M` 根据 `G` 中的栈信息和调度信息设置运行环境。
@@ -324,5 +324,5 @@ type p struct {
 ### G-M-P高效的保证策略有：
 - `M`是可以复用的，不需要反复创建与销毁，当没有可执行的`Goroutine`时候就处于自旋状态，等待唤醒
 - `Work Stealing`和`Hand Off`策略保证了M的高效利用
-- 内存分配状态(mcache)位于P，G可以跨M调度，不再存在跨M调度局部性差的问题
-- M从关联的P中获取G，不需要使用锁，是lock free的
+- 内存分配状态(`mcache`)位于 `P`，`G` 可以跨 `M` 调度，不再存在跨M调度局部性差的问题
+- `M` 从关联的 `P` 中获取 `G`，不需要使用锁，是`lock free`的
