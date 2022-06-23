@@ -1,7 +1,7 @@
 ## 使用场景
-sync.Once 是 Go 标准库提供的使函数只执行一次的实现，常应用于单例模式，例如初始化配置、保持数据库连接等。作用与 init 函数类似，但有区别:
+`sync.Once` 是 `Go` 标准库提供的使函数只执行一次的实现，常应用于单例模式，例如初始化配置、保持数据库连接等。作用与 `init` 函数类似，但有区别:
 - `init`函数是当所在的`package`首次被加载时执行
-- 有人常常会用init来初始化一些变量。若变量迟迟未被使用，则既浪费了内存，又延长了程序加载时间
+- 有人常常会用 `init` 来初始化一些变量。若变量迟迟未被使用，则既浪费了内存，又延长了程序加载时间
 - `sync.Once`可以在代码的任意位置初始化和调用，因此可以延迟到使用时再执行，并发场景下是线程安全的
 - 可以类比为懒加载和预加载
 
@@ -56,9 +56,9 @@ func main() {
 }
 ```
 - 声明了 2 个全局变量，`once` 和 `config`
-- `config` 是需要在 `ReadConfig` 函数中初始化的(将环境变量转换为 Config 结构体)，`ReadConfig`可能会被并发调用。
+- `config` 是需要在 `ReadConfig` 函数中初始化的(将环境变量转换为 `Config` 结构体)，`ReadConfig`可能会被并发调用。
 
-如果 ReadConfig 每次都构造出一个新的 Config 结构体，既浪费内存，又浪费初始化时间。如果 ReadConfig 中不加锁，初始化全局变量 config 就可能出现并发冲突。这种情况下，使用 sync.Once 既能够保证全局变量初始化时是线程安全的，又能节省内存和初始化时间。
+如果 `ReadConfig` 每次都构造出一个新的 `Config` 结构体，既浪费内存，又浪费初始化时间。如果 `ReadConfig` 中不加锁，初始化全局变量 `config` 就可能出现并发冲突。这种情况下，使用 sync.Once 既能够保证全局变量初始化时是线程安全的，又能节省内存和初始化时间。
 最终，运行结果如下：
 ```bash
 $ go run .
@@ -66,7 +66,7 @@ $ go run .
 ```
 
 2.标准库中的使用
-`sync.Once`在 Go 语言标准库中被广泛使用,下面看下标准库是怎么使用的,比如 package html 中，对象 entity 只被初始化一次：
+`sync.Once`在 Go 语言标准库中被广泛使用,下面看下标准库是怎么使用的,比如 `package html` 中，对象 `entity` 只被初始化一次：
 ```go
 var populateMapsOnce sync.Once
 var entity           map[string]rune
@@ -92,7 +92,7 @@ func UnescapeString(s string) string {
     // 省略后续的实现
 }
 ```
-- 字典 entity 包含 2005 个键值对，若使用 init 在包加载时初始化，若不被使用，将会浪费大量内存。
+- 字典 `entity` 包含 `2005` 个键值对，若使用 `init` 在包加载时初始化，若不被使用，将会浪费大量内存。
 - `html.UnescapeString(s)`函数是线程安全的，可能会被用户程序在并发场景下调用，因此对`entity`的初始化需要加锁，使用`sync.Once`能保证这一点。
 
 ## 原理

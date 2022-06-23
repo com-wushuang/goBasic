@@ -11,10 +11,10 @@ cond := sync.NewCond(new(sync.Mutex))
 ```
 
 ## 方法
-- `cond.L.Lock()和cond.L.Unlock()`：也可以使用lock.Lock()和lock.Unlock()，完全一样，因为初始化的时候是指针转递
-- `cond.Wait()`：Unlock() -> 阻塞等待通知(即等待Signal()或Broadcast()的通知) -> 收到通知 -> Lock()
-- `cond.Signal()`：通知一个Wait()了的，若没有Wait()，也不会报错。Signal()通知的顺序是根据原来加入通知列表(Wait())的先入先出
-- `cond.Broadcast()`: 通知所有Wait()了的，若没有Wait()，也不会报错
+- `cond.L.Lock()和cond.L.Unlock()`：也可以使用`lock.Lock()`和`lock.Unlock()`，完全一样，因为初始化的时候是指针转递
+- `cond.Wait()`：`Unlock()` -> `阻塞等待通知(即等待Signal()或Broadcast()的通知)` -> `收到通知` -> `Lock()`
+- `cond.Signal()`：通知一个`Wait()`了的，若没有`Wait()`，也不会报错。`Signal()`通知的顺序是根据原来加入通知列表(`Wait()`)的先入先出
+- `cond.Broadcast()`: 通知所有`Wait()`了的，若没有`Wait()`，也不会报错
 
 ## 使用场景
 - `sync.Cond` 在生产者消费者模型中非常典型，带有互斥锁的队列当元素满时， 如果生产在向队列插入元素时将队列锁住，会产生既不能读，也不能写的情况。

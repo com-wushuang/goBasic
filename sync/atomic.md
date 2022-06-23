@@ -1,9 +1,9 @@
-https://developer.aliyun.com/article/786406
-https://juejin.cn/post/6977202902267854862
-https://segmentfault.com/a/1190000016611415
-https://juejin.cn/post/7010590496204521485
-http://static.kancloud.cn/digest/batu-go/153537
-https://cloud.tencent.com/developer/article/1645697
+- https://developer.aliyun.com/article/786406
+- https://juejin.cn/post/6977202902267854862
+- https://segmentfault.com/a/1190000016611415
+- https://juejin.cn/post/7010590496204521485
+- http://static.kancloud.cn/digest/batu-go/153537
+- https://cloud.tencent.com/developer/article/1645697
 
 ## 什么是原子操作
 原子操作即是进行过程中不能被中断的操作，针对某个值的原子操作在被进行的过程中，CPU绝不会再去进行其他的针对该值的操作。为了实现这样的严谨性，原子操作仅会由一个独立的CPU指令代表和完成。原子操作是无锁的，常常直接通过CPU指令直接实现。事实上，其它同步技术的实现常常依赖于原子操作。
@@ -36,7 +36,7 @@ func mutexAdd() {
 }
 ```
 
-把Mutex改成用方法atomic.AddInt32(&a, 1)调用，在不加锁的情况下仍然能确保对变量递增的并发安全:
+把 `Mutex` 改成用方法 `atomic.AddInt32(&a, 1)` 调用，在不加锁的情况下仍然能确保对变量递增的并发安全:
 ```go
 func AtomicAdd() {
 	var a int32 =  0
@@ -56,8 +56,8 @@ func AtomicAdd() {
 
 ```
 ## CAS
-- 调用函数后，会先判断参数addr指向的被操作值与参数old的值是否相等
-- 仅当此判断得到肯定的结果之后，才会用参数new代表的新值替换掉原先的旧值，否则操作就会被忽略。所以，需要用for循环不断进行尝试,直到成功为止
+- 调用函数后，会先判断参数 `addr` 指向的被操作值与参数 `old` 的值是否相等
+- 仅当此判断得到肯定的结果之后，才会用参数new代表的新值替换掉原先的旧值，否则操作就会被忽略。所以，需要用 `for` 循环不断进行尝试,直到成功为止
 - 使用锁的做法趋于悲观，我们总假设会有并发的操作要修改被操作的值，并使用锁将相关操作放入临界区中加以保护
 - 使用CAS操作的做法趋于乐观,总是假设被操作值未曾被改变（即与旧值相等），并一旦确认这个假设的真实性就立即进行值替换
 ```go
@@ -95,9 +95,9 @@ atomic.StoreInt32(&value, 10)
 
 ## 互斥锁和原子操作的区别
 - 使用目的：互斥锁是用来保护一段逻辑，原子操作用于对一个变量的更新保护
-- 底层实现：Mutex由操作系统的调度器实现，而atomic包中的原子操作则由底层硬件指令直接提供支持，这些指令在执行的过程中是不允许中断的，因此原子操作可以在lock-free的情况下保证并发安全，并且它的性能也能做到随CPU个数的增多而线性扩展
+- 底层实现：`Mutex` 由操作系统的调度器实现，而 `atomic` 包中的原子操作则由底层硬件指令直接提供支持，这些指令在执行的过程中是不允许中断的，因此原子操作可以在 `lock-free` 的情况下保证并发安全，并且它的性能也能做到随 `CPU` 个数的增多而线性扩展
 - 互斥锁是一种数据结构，用来让一个线程执行程序的关键部分，完成互斥的多个操作
-- 互斥锁在实现的过程中使用到了原子操作CAS
+  - 互斥锁在实现的过程中使用到了原子操作 `CAS`
 ```go
 func (m *Mutex) Lock() {
    // Fast path: grab unlocked mutex.
