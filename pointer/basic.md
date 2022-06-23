@@ -28,15 +28,18 @@ func main() {
 	f = &a
 }
 ```
-
-unsafe 包用于 Go 编译器，在编译阶段使用，它可以绕过 Go 语言的类型系统，直接操作内存。例如，一般我们不能操作一个结构体的未导出成员，但是通过 unsafe 包就能做到。Go 语言类型系统是为了安全和效率设计的，有时，安全会导致效率低下。有了 unsafe 包，高阶的程序员就可以利用它绕过类型系统的低效。因此，它就有了存在的意义，阅读 Go 源码，会发现有大量使用 unsafe 包的例子。
+- `unsafe` 包用于 `Go` 编译器，在编译阶段使用，它可以绕过 `Go` 语言的类型系统，直接操作内存。
+- 例如，一般我们不能操作一个结构体的未导出成员，但是通过 `unsafe` 包就能做到。
+- `Go` 语言类型系统是为了安全和效率设计的，有时，安全会导致效率低下。
+- 有了 `unsafe` 包，高阶的程序员就可以利用它绕过类型系统的低效。
+- 因此，它就有了存在的意义，阅读 `Go` 源码，会发现有大量使用 `unsafe` 包的例子。
 
 ## 使用
 
 unsafe 包提供了 2 点重要的能力：
 
-- 任何类型的指针和 unsafe.Pointer 可以相互转换。
-- uintptr 类型和 unsafe.Pointer 可以相互转换。
+- 任何类型的指针和 `unsafe.Pointer` 可以相互转换。
+- uintptr 类型和 `unsafe.Pointer` 可以相互转换。
 
 ![unsafe](https://github.com/com-wushuang/goBasic/blob/main/image/unsafe.png)
 
@@ -51,7 +54,7 @@ type slice struct {
 }
 ```
 
-调用 make 函数新建一个 slice，底层调用的是 makeslice 函数，返回的是 slice 结构体：
+调用 `make` 函数新建一个 `slice`，底层调用的是 `makeslice` 函数，返回的是 `slice` 结构体：
 
 ```go
 func makeslice(et *_type, len, cap int) slice
@@ -144,11 +147,11 @@ pb := (*int16)(unsafe.Pointer(tmp))
 *pb = 42
 ```
 
-有时候垃圾回收器会移动一些变量以降低内存碎片等问题。这类垃圾回收器被称为移动GC。当一个变量被移动，所有的保存改变量旧地址的指针必须同时被更新为变量移动后的新地址。
+有时候垃圾回收器会移动一些变量以降低内存碎片等问题。这类垃圾回收器被称为移动 `GC` 。当一个变量被移动，所有的保存改变量旧地址的指针必须同时被更新为变量移动后的新地址。
 
-从垃圾收集器的视角来看，一个unsafe.Pointer是一个指向变量的指针，因此当变量被移动是对应的指针也必须被更新；但是uintptr类型的临时变量只是一个普通的数字，所以其值不会被改变。
+从垃圾收集器的视角来看，一个 `unsafe.Pointer` 是一个指向变量的指针，因此当变量被移动是对应的指针也必须被更新；但是 `uintptr` 类型的临时变量只是一个普通的数字，所以其值不会被改变。
 
-上面错误的代码因为引入一个非指针的临时变量tmp，导致垃圾收集器无法正确识别这个是一个指向变量x的指针。当第二个语句执行时，变量x可能已经被转移，这时候临时变量tmp也就不再是现在的&x.b地址。第三个向之前无效地址空间的赋值语句将彻底摧毁整个程序！
+上面错误的代码因为引入一个非指针的临时变量 `tmp` ，导致垃圾收集器无法正确识别这个是一个指向变量 `x` 的指针。当第二个语句执行时，变量 `x` 可能已经被转移，这时候临时变量 `tmp` 也就不再是现在的 `&x.b` 地址。第三个向之前无效地址空间的赋值语句将彻底摧毁整个程序！
 
 
 ### 实现字符串和 bytes 切片之间的零拷贝转换
@@ -159,6 +162,7 @@ b:=[]byte(s) // 把s字符串中的值拷贝到byte切片的底层数组了
 ```
 
 **zero-copy实现**
+
 分析 `slice` 和 `string` 的底层数据结构：
 ```go
 type StringHeader struct {
@@ -172,7 +176,7 @@ type SliceHeader struct {
 	Cap  int
 }
 ```
-只需要共享底层 Data 和 Len 就可以实现 zero-copy：
+只需要共享底层 `Data` 和 `Len` 就可以实现 `zero-copy`：
 ```go
 func string2bytes(s string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&s))
@@ -181,7 +185,7 @@ func bytes2string(b []byte) string{
 	return *(*string)(unsafe.Pointer(&b))
 }
 ```
-但是存在的问题是，无法共享Cap字段，为此我做了如下的实验：
+但是存在的问题是，无法共享 `Cap` 字段，为此我做了如下的实验：
 ```go
 func TestName(t *testing.T) {
 	s:="chengjun"
@@ -190,4 +194,4 @@ func TestName(t *testing.T) {
 	fmt.Println(cap(b))
 }
 ```
-cap的值在每次运行代码的时候，都是不一一致的，说明cap没法共享。
+`cap` 的值在每次运行代码的时候，都是不一一致的，说明 `cap` 没法共享。
