@@ -88,10 +88,11 @@ $ dockerd --bip=$FLANNEL_SUBNET ...
 
 - 实际上，相比于两台宿主机之间的直接通信，基于 `Flannel UDP` 模式的容器通信多了一个额外的步骤，即 `flanneld` 的处理过程。
 - 而这个过程，由于使用到了 `flannel0` 这个 `TUN` 设备，仅在发出 `IP` 包的过程中，就需要经过三次用户态与内核态之间的数据拷贝，如下所示：
-![flannel_udp_weakness](https://github.com/com-wushuang/goBasic/blob/main/image/flannel_udp_weakness.webp)
+- ![flannel_udp_weakness](https://github.com/com-wushuang/goBasic/blob/main/image/flannel_udp_weakness.webp)
 - 第一次，用户态的容器进程发出的 `IP` 包经过 `docker0` 网桥进入内核态；
 - 第二次，`IP` 包根据路由表进入 `TUN`（`flannel0`）设备，从而回到用户态的 flanneld 进程；
 - 第三次，`flanneld` 进行 `UDP` 封包之后重新进入内核态，将 `UDP` 包通过宿主机的 `eth0` 发出去。
+- 先上图我们可以看到网络设备都运行在内核态，用户进程都运行在用户态。
 
 数据的封装和解封装
 

@@ -162,7 +162,7 @@ NAME        STATUS    VOLUME                                     CAPACITY   ACCE
 www-web-0   Bound     pvc-15c268c7-b507-11e6-932f-42010a800002   1Gi        RWO           48s
 www-web-1   Bound     pvc-15c79307-b507-11e6-932f-42010a800002   1Gi        RWO           48s
 ```
-- 这些 `PVC`，都以"<PVC名字>-<StatefulSet名字>-<编号>"的方式命名
+- 这些 `PVC`，都以`<PVC名字>-<StatefulSet名字>-<编号>`的方式命名
 - 这个 `StatefulSet` 创建出来的所有 `Pod`，都会声明使用编号的 `PVC`。比如，在名叫 `web-0` 的 `Pod` 的 `volumes` 字段，它会声明使用名叫 `www-web-0` 的 PVC，从而挂载到这个 `PVC` 所绑定的 `PV`
 - 当你把一个 `Pod`，比如 `web-0`，删除之后，这个 `Pod` 对应的 `PVC` 和 `PV`，并不会被删除，而这个 `Volume` 里已经写入的数据，也依然会保存在远程存储服务里
 - 新的 `Pod` 对象的定义里，它声明使用的 `PVC` 的名字，还是叫作：`www-web-0`。这个 `PVC` 的定义，还是来自于 `PVC` 模板 `volumeClaimTemplates`
