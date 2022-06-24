@@ -165,9 +165,9 @@ drink: {{ .Values.favorite.drink | default "tea" | quote }}
 ```
 
 #### lookup函数
-- lookup 函数可以用于查看k8s集群的资源
+- lookup 函数可以用于查看 `k8s` 集群的资源
 - lookup 函数简述为: `lookup apiVersion, kind, namespace,name` -> `资源或者资源列表`
-- 当lookup返回一个对象，它会返回一个字典。这个字典可以进一步被引导以获取特定值
+- 当lookup返回一个对象时，它会返回一个字典。这个字典可以进一步被引导以获取特定值
 ```yaml
 (lookup "v1" "Namespace" "" "mynamespace").metadata.annotations
 ```

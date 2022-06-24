@@ -50,7 +50,7 @@ nginx-deployment   3            0            0           1s
   - `DESIRED`：用户期望的 `Pod` 副本个数（spec.replicas 的值）
   - `UP-TO-DATE`：当前处于最新版本的 Pod 的个数，所谓最新版本指的是 Pod 的 Spec 部分与 Deployment 里 Pod 模板里定义的完全一致
   - `AVAILABLE`：当前已经可用的 Pod 的个数，即：既是 Running 状态，又是最新版本，并且已经处于 Ready（健康检查正确）状态的 Pod 的个数
-  - 只有这个 AVAILABLE 字段，描述的才是用户所期望的最终状态
+  - 只有这个 `AVAILABLE` 字段，描述的才是用户所期望的最终状态
 - 查看一下这个 Deployment 所控制的 ReplicaSet
 ```shell
 $ kubectl get rs
