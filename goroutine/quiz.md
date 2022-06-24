@@ -223,7 +223,7 @@ type p struct {
 	id          int32
 	status      uint32 // one of pidle/prunning/...
 	link        puintptr
-	// 每次调用 schedule 时会加一
+	// 每次调用 schedule.md 时会加一
 	schedtick   uint32
 	// 每次系统调用时加一
 	syscalltick uint32
