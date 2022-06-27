@@ -1,170 +1,201 @@
-## 什么是 Ingress？
-### 背景
-- `Service` 的访问信息在 `Kubernetes` 集群之外，其实是无效的。
-- 所谓 `Service` 的访问入口，其实就是每台宿主机上由 `kube-proxy`生成的 `iptables` 规则，以及 `kube-dns` 生成的 `DNS` 记录。
-- 而一旦离开了这个集群，这些信息对用户来说，也就自然没有作用了。
-- 在使用 `Kubernetes` 的 `Service` 时，一个必须要面对和解决的问题就是：如何从外部（`Kubernetes` 集群之外），访问到 `Kubernetes` 里创建的 `Service`？
+## 背景
+- 由于每个 `Service` 都要有一个负载均衡服务，所以这个做法实际上既浪费成本又高。作为用户，我其实更希望看到 `Kubernetes` 为我内置一个全局的负载均衡器。然后，通过我访问的 `URL`，把请求转发给不同的后端 `Service`。
+- 这种全局的、为了代理不同后端 `Service` 而设置的负载均衡服务，就是 `Kubernetes` 里的 `Ingress` 服务。
+- `Ingress` 的功能其实很容易理解：所谓 `Ingress`，就是 `Service` 的 `Service`。
 
-### NodePort
-- 最常用的一种方式就是：`NodePort`
+## 实例
+- 举个例子，假如我现在有这样一个站点：`https://cafe.example.com`。
+- `https://cafe.example.com/coffee`: 对应的是“咖啡点餐系统”。
+- `https://cafe.example.com/tea`: 对应的是“茶水点餐系统”。
+- 这两个系统，分别由名叫 `coffee` 和 `tea` 这样两个 `Deployment` 来提供服务。
+- 那么现在，如何能使用 `Kubernetes` 的 `Ingress` 来创建一个统一的负载均衡器，从而实现当用户访问不同的域名时，能够访问到不同的 `Deployment` 呢？
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: cafe-ingress
+spec:
+  tls:
+  - hosts:
+    - cafe.example.com
+    secretName: cafe-secret
+  rules:
+  - host: cafe.example.com
+    http:
+      paths:
+      - path: /tea
+        backend:
+          serviceName: tea-svc
+          servicePort: 80
+      - path: /coffee
+        backend:
+          serviceName: coffee-svc
+          servicePort: 80
+```
+- `ingress` 的定义中最重要的是 `rules` 字段，在 `Kubernetes` 里，这个字段叫作：`IngressRule`。
+- `IngressRule` 的 `Key` 是 `host`，必须是一个标准的域名格式的字符串，而不能是 `IP` 地址。
+- 当访问 `cafe.example.com` 的时候，实际上访问到的是这个 `Ingress` 对象。这样，`Kubernetes` 就能使用 `IngressRule` 来对请求进行下一步转发。
+- 转发的规则依赖于 `path` 字段，这里的每一个 `path` 都对应一个后端 `Service`。在本例中，定义了两个 `path`，它们分别对应 `coffee` 和 `tea` 这两个 `Deployment` 的 `Service`。
+
+## 原理
+- 通过上面的讲解，不难看到，所谓 `Ingress` 对象，其实就是 `Kubernetes` 项目对“反向代理”的一种抽象。
+- 一个 `Ingress` 对象的主要内容，实际上就是一个 `反向代理` 服务（比如：`Nginx`）的配置文件的描述。而这个代理服务对应的转发规则，就是 `IngressRule`。
+- 这就是为什么在每条 `IngressRule` 里，需要有一个 `host` 字段来作为这条 `IngressRule` 的入口，然后还需要有一系列 `path` 字段来声明具体的转发策略。这其实跟 `Nginx`、`HAproxy` 等项目的配置文件的写法是一致的。
+- 而有了 `Ingress` 这样一个统一的抽象，`Kubernetes` 的用户就无需关心 Ingress 的具体细节了。
+- 你只需要从社区里选择一个具体的 `Ingress Controller`，把它部署在 `Kubernetes` 集群里即可。
+- 然后，这个 `Ingress Controller` 会根据你定义的 `Ingress` 对象，提供对应的代理能力。
+- 目前，业界常用的各种反向代理项目，比如 `Nginx`、`HAProxy`、`Envoy`、`Traefik` 等，都已经为 `Kubernetes` 专门维护了对应的 `Ingress Controller`。
+- 部署 `Nginx Ingress Controller` 的清单文件如下:
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: nginx-configuration
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-ingress-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/part-of: ingress-nginx
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ingress-nginx
+        app.kubernetes.io/part-of: ingress-nginx
+      annotations:
+        ...
+    spec:
+      serviceAccountName: nginx-ingress-serviceaccount
+      containers:
+        - name: nginx-ingress-controller
+          image: quay.io/kubernetes-ingress-controller/nginx-ingress-controller:0.20.0
+          args:
+            - /nginx-ingress-controller
+            - --configmap=$(POD_NAMESPACE)/nginx-configuration
+            - --publish-service=$(POD_NAMESPACE)/ingress-nginx
+            - --annotations-prefix=nginx.ingress.kubernetes.io
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+            # www-data -> 33
+            runAsUser: 33
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+            - name: http
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: http
+              containerPort: 80
+            - name: https
+              containerPort: 443
+```
+- 在上述 `YAML` 文件中，我们定义了一个使用 `nginx-ingress-controller` 镜像的 `Pod`。
+- 这个 `Pod` 本身，就是一个监听 `Ingress` 对象以及它所代理的后端 `Service` 变化的控制器。
+- 当新的 `Ingress` 对象由用户创建后，`nginx-ingress-controller` 就会根据 `Ingress` 对象里定义的内容，生成一份对应的 `Nginx` 配置文件（`/etc/nginx/nginx.conf`），并使用这个配置文件启动一个 `Nginx` 服务。
+- 而一旦 `Ingress` 对象被更新，`nginx-ingress-controller` 就会更新这个配置文件。
+- 一个 `Nginx Ingress Controller` 为你提供的服务，其实是一个可以根据 `Ingress` 对象和被代理后端 `Service` 的变化，来自动进行更新的 `Nginx` 负载均衡器。
+- 此外，`nginx-ingress-controller` 还允许你通过 `Kubernetes` 的 `ConfigMap` 对象来对上述 `Nginx` 配置文件进行定制。这个 `ConfigMap` 的名字，需要以参数的方式传递给 `nginx-ingress-controller`。而你在这个 `ConfigMap` 里添加的字段，将会被合并到最后生成的 `Nginx` 配置文件当中。
+- 可以看到，一个 `Nginx Ingress Controller` 为你提供的服务，其实是一个可以根据 `Ingress` 对象和被代理后端 `Service` 的变化，来自动进行更新的 `Nginx` 负载均衡器。
+- 为了让用户能够用到这个 `Nginx`，我们就需要创建一个 `Service` 来把 `Nginx Ingress Controller` 管理的 Nginx 服务暴露出去，如下所示：
+```shell
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/provider/baremetal/service-nodeport.yaml
+```
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: my-nginx
+  name: ingress-nginx
+  namespace: ingress-nginx
   labels:
-    run: my-nginx
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
 spec:
   type: NodePort
   ports:
-  - nodePort: 8080
-    targetPort: 80
-    protocol: TCP
-    name: http
-  - nodePort: 443
-    protocol: TCP
-    name: https
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
   selector:
-    run: my-nginx
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
 ```
-- 在这个 `Service` 的定义里，我们声明它的类型是，`type=NodePort`。
-- 在 `ports` 字段里声明了 `Service` 的 `8080` 端口代理 `Pod` 的 `80` 端口，`Service` 的 `443` 端口代理 `Pod` 的 `443` 端口。
-- 如果不显式地声明 `nodePort` 字段，`Kubernetes` 就会为你分配随机的可用端口来设置代理。这个端口的范围默认是 `30000-32767`，你可以通过 `kube-apiserver` 的 `–service-node-port-range` 参数来修改它。
-- 这时候，要访问这个 `Service`，你只需要访问：`<任何一台宿主机的IP地址>:8080` ，就可以访问到某一个被代理的 `Pod` 的 `80` 端口了。
-
-#### 原理
-- 显然，`kube-proxy` 要做的，就是在每台宿主机上生成这样一条 `iptables` 规则：
+- 这个 `Service` 的唯一工作，就是将所有携带 `ingress-nginx` 标签的 Pod 的 `80` 和 `433` 端口暴露出去。
+- 上述操作完成后，你一定要记录下这个 `Service` 的访问入口，即：宿主机的地址和 `NodePort` 的端口，如下所示：
 ```shell
--A KUBE-NODEPORTS -p tcp -m comment --comment "default/my-nginx: nodePort" -m tcp --dport 8080 -j KUBE-SVC-67RL4FN6JRUPOJYM
+$ kubectl get svc -n ingress-nginx
+NAME            TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)                      AGE
+ingress-nginx   NodePort   10.105.72.96   <none>        80:30044/TCP,443:31453/TCP   3h
 ```
-- `KUBE-SVC-67RL4FN6JRUPOJYM` 其实就是一组随机模式的 iptables 规则。
-- 在 `NodePort` 方式下，`Kubernetes` 会在 `IP` 包离开宿主机发往目的 `Pod` 时，对这个 `IP` 包做一次 `SNAT` 操作。
-```shell
--A KUBE-POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark 0x4000/0x4000 -j MASQUERADE
-```
-- 它给即将离开这台主机的 `IP` 包，进行了一次 `SNAT` 操作，将这个 `IP` 包的源地址替换成了这台宿主机上的 `CNI` 网桥地址，或者宿主机本身的 `IP` 地址（如果 `CNI` 网桥不存在的话）。
-- 这个 `SNAT` 操作只需要对 `Service` 转发出来的 `IP` 包进行（否则普通的 IP 包就被影响了）。而 `iptables` 做这个判断的依据，就是查看该 `IP` 包是否有一个 `0x4000` 的 `标志`。你应该还记得，这个标志正是在 `IP` 包被执行 `DNAT` 操作之前被打上去的。
-- 为什么要做SNAT呢？
-```shell
-           client
-             \ ^
-              \ \
-               v \
-   node 1 <--- node 2
-    | ^   SNAT
-    | |   --->
-    v |
- endpoint
-```
-- 当一个外部的 `client` 通过 `node 2` 的地址访问一个 `Service` 的时候，`node 2` 上的负载均衡规则，就可能把这个 `IP` 包转发给一个在 `node 1` 上的 `Pod`。这里没有任何问题。
-- 而当 `node 1` 上的这个 `Pod` 处理完请求之后，它就会按照这个 `IP` 包的源地址发出回复。可是，如果没有做 `SNAT` 操作的话，这时候，被转发来的 `IP` 包的源地址就是 `client` 的 `IP` 地址。
-- 所以此时，`Pod` 就会直接将回复发给 `client`。对于 `client` 来说，它的请求明明发给了 `node 2`，收到的回复却来自 `node 1`，这个 `client` 很可能会报错。
-- 所以，在上图中，当 `IP` 包离开 `node 2` 之后，它的源 `IP` 地址就会被 `SNAT` 改成 `node 2` 的 `CNI` 网桥地址或者 `node 2` 自己的地址。这样，`Pod` 在处理完成之后就会先回复给 `node 2`（而不是 `client`），然后再由 `node 2` 发送给 `client`。当然，这也就意味着这个 `Pod` 只知道该 `IP` 包来自于 `node 2`，而不是外部的 `client`。
-- 对于 `Pod` 需要明确知道所有请求来源的场景来说，这是不可以的。所以这时候，你就可以将 `Service` 的 `spec.externalTrafficPolicy` 字段设置为 `local`，这就保证了所有 `Pod` 通过 `Service` 收到请求之后，一定可以看到真正的、外部 `client` 的源地址。
-- 而这个机制的实现原理也非常简单：这时候，一台宿主机上的 `iptables` 规则，会设置为只将 `IP` 包转发给运行在这台宿主机上的 `Pod`。所以这时候，`Pod` 就可以直接使用源地址将回复包发出，不需要事先进行 `SNAT` 了。这个流程，如下所示：
-```shell
-       client
-       ^ /   \
-      / /     \
-     / v       X
-   node 1     node 2
-    ^ |
-    | |
-    | v
- endpoint
-```
-- 当然，这也就意味着如果在一台宿主机上，没有任何一个被代理的 `Pod` 存在，比如上图中的 `node 2`，那么你使用 `node 2` 的 `IP` 地址访问这个 `Service`，就是无效的。此时，你的请求会直接被 `DROP` 掉。
+- 在 Ingress Controller 和它所需要的 Service 部署完成后，我们就可以使用它了。
 
-### LoadBalancer
-LoadBalancer 的定义如下:
-```yaml
-kind: Service
-apiVersion: v1
-metadata:
-  name: example-service
-spec:
-  ports:
-  - port: 8765
-    targetPort: 9376
-  selector:
-    app: example
-  type: LoadBalancer
-```
-- 在公有云提供的 `Kubernetes` 服务里，都使用了一个叫作 `CloudProvider` 的转接层，来跟公有云本身的 `API` 进行对接。
-- 所以，在上述 `LoadBalancer` 类型的 `Service` 被提交后，`Kubernetes` 就会调用 `CloudProvider` 在公有云上为你创建一个负载均衡服务，并且把被代理的 `Pod` 的 `IP` 地址配置给负载均衡服务做后端。
-- `LoadBalancer` 类型的 `service` 背后是动态地配置公有云上的负载均衡。
-
-### ExternalName
-`Kubernetes` 在 1.7 之后支持的一个新特性，叫作 `ExternalName`。举个例子：
-```yaml
-kind: Service
-apiVersion: v1
-metadata:
-  name: my-service
-spec:
-  type: ExternalName
-  externalName: my.database.example.com
-```
-- yaml 中指定了 `externalName=my.database.example.com` 字段。而且这个 `YAML` 文件里不需要指定 `selector`。
-- 当你通过 `Service` 的 `DNS` 名字访问它的时候，比如访问：`my-service.default.svc.cluster.local`。那么，Kubernetes 为你返回的就是`my.database.example.com`。
-- 所以 `ExternalName` 类型的 `Service`，其实是在 `kube-dns` 里为你添加了一条 `CNAME` 记录。这时，访问 `my-service.default.svc.cluster.local` 就和访问 `my.database.example.com` 这个域名是一个效果了。
-- 相当于一个外部可以访问的别名 `DNS` 域名。
-
-### externalIPs
-`externalIPs` 类型的 `Service` 定义如下:
-```yaml
-kind: Service
-apiVersion: v1
-metadata:
-  name: my-service
-spec:
-  selector:
-    app: MyApp
-  ports:
-  - name: http
-    protocol: TCP
-    port: 80
-    targetPort: 9376
-  externalIPs:
-  - 80.11.12.10
-```
-- 在 `Service` 中指定了 `externalIPs=80.11.12.10`，那么你就可以通过访问 `80.11.12.10:80` 访问到被代理的 `Pod` 了。
-
-### 总结
-- 理解了 `Kubernetes Service` 机制的工作原理之后，很多与 `Service` 相关的问题，其实都可以通过分析 `Service` 在宿主机上对应的 `iptables` 规则（或者 `IPVS` 配置）得到解决。
-- 当你的 `Service` 没办法通过 `DNS` 访问到的时候。你就需要区分到底是 `Service` 本身的配置问题，还是集群的 `DNS` 出了问题。一个行之有效的方法，就是检查 `Kubernetes` 自己的 `Master` 节点的 `Service DNS` 是否正常：
+## 使用
+- 首先，我们要在集群里部署我们的应用 Pod 和它们对应的 Service，如下所示：
 ```shell
-# 在一个Pod里执行
-$ nslookup kubernetes.default
-Server:    10.0.0.10
-Address 1: 10.0.0.10 kube-dns.kube-system.svc.cluster.local
-
-Name:      kubernetes.default
-Address 1: 10.0.0.1 kubernetes.default.svc.cluster.local
+$ kubectl create -f cafe.yaml
 ```
-- 如果上面访问 `kubernetes.default` 返回的值都有问题，那你就需要检查 `kube-dns` 的运行状态和日志了。否则的话，你应该去检查自己的 `Service` 定义是不是有问题。
-- 而如果你的 `Service` 没办法通过 `ClusterIP` 访问到的时候，你首先应该检查的是这个 `Service` 是否有 `Endpoints`：
-```yaml
-$ kubectl get endpoints hostnames
-NAME        ENDPOINTS
-hostnames   10.244.0.5:9376,10.244.0.6:9376,10.244.0.7:9376
-```
-- 而如果 `Endpoints` 正常，那么你就需要确认 `kube-proxy` 是否在正确运行。在我们通过 `kubeadm` 部署的集群里，你应该看到 `kube-proxy` 输出的日志如下所示：
+- 然后创建 `Ingress` 所需的 `SSL` 证书（`tls.crt`）和密钥（`tls.key`），这些信息都是通过 `Secret` 对象定义好的，如下所示：
 ```shell
-I1027 22:14:53.995134    5063 server.go:200] Running in resource-only container "/kube-proxy"
-I1027 22:14:53.998163    5063 server.go:247] Using iptables Proxier.
-I1027 22:14:53.999055    5063 server.go:255] Tearing down userspace rules. Errors here are acceptable.
-I1027 22:14:54.038140    5063 proxier.go:352] Setting endpoints for "kube-system/kube-dns:dns-tcp" to [10.244.1.3:53]
-I1027 22:14:54.038164    5063 proxier.go:352] Setting endpoints for "kube-system/kube-dns:dns" to [10.244.1.3:53]
-I1027 22:14:54.038209    5063 proxier.go:352] Setting endpoints for "default/kubernetes:https" to [10.240.0.2:443]
-I1027 22:14:54.038238    5063 proxier.go:429] Not syncing iptables until Services and Endpoints have been received from master
-I1027 22:14:54.040048    5063 proxier.go:294] Adding new service "default/kubernetes:https" at 10.0.0.1:443/TCP
-I1027 22:14:54.040154    5063 proxier.go:294] Adding new service "kube-system/kube-dns:dns" at 10.0.0.10:53/UDP
-I1027 22:14:54.040223    5063 proxier.go:294] Adding new service "kube-system/kube-dns:dns-tcp" at 10.0.0.10:53/TCP
+$ kubectl create -f cafe-secret.yaml
 ```
-- 如果 `kube-proxy` 一切正常，你就应该仔细查看宿主机上的 `iptables` 了。而一个 `iptables` 模式的 `Service` 对应的规则，它们包括：
-  - `KUBE-SERVICES` 或者 `KUBE-NODEPORTS` 规则对应的 `Service` 的入口链，这个规则应该与 `VIP` 和 `Service` 端口一一对应
-  - `KUBE-SEP-(hash)` 规则对应的 `DNAT` 链，这些规则应该与 `Endpoints` 一一对应
-  - `KUBE-SVC-(hash)` 规则对应的负载均衡链，这些规则的数目应该与 `Endpoints` 数目一致
-  - 如果是 `NodePort` 模式的话，还有 `POSTROUTING` 处的 `SNAT` 链
-- 通过查看这些链的数量、转发目的地址、端口、过滤条件等信息，你就能很容易发现一些异常的蛛丝马迹。
+- 这一步完成后，我们就可以创建在本篇文章一开始定义的 Ingress 对象了，如下所示：
+```shell
+$ kubectl create -f cafe-ingress.yaml
+```
+- 这时候，我们就可以查看一下这个 Ingress 对象的信息，如下所示：
+```shell
+$ kubectl get ingress
+NAME           HOSTS              ADDRESS   PORTS     AGE
+cafe-ingress   cafe.example.com             80, 443   2h
+
+$ kubectl describe ingress cafe-ingress
+Name:             cafe-ingress
+Namespace:        default
+Address:          
+Default backend:  default-http-backend:80 (<none>)
+TLS:
+  cafe-secret terminates cafe.example.com
+Rules:
+  Host              Path  Backends
+  ----              ----  --------
+  cafe.example.com  
+                    /tea      tea-svc:80 (<none>)
+                    /coffee   coffee-svc:80 (<none>)
+Annotations:
+Events:
+  Type    Reason  Age   From                      Message
+  ----    ------  ----  ----                      -------
+  Normal  CREATE  4m    nginx-ingress-controller  Ingress default/cafe-ingress
+```
+- 可以看到，这个 `Ingress` 对象最核心的部分，正是 `Rules` 字段。其中，我们定义的 `Host` 是 `cafe.example.com`，它有两条转发规则（`Path`），分别转发给 `tea-svc` 和 `coffee-svc`。
+- 如果我的请求没有匹配到任何一条 IngressRule，那么会发生什么呢？
+- 既然 `Nginx Ingress Controller` 是用 `Nginx` 实现的，那么它当然会为你返回一个 `Nginx` 的 `404` 页面。
+- 不过，`Ingress Controller` 也允许你通过 `Pod` 启动命令里的 `–default-backend-service` 参数，设置一条默认规则，比如：`–default-backend-service=nginx-default-backend`。
+- 这样，任何匹配失败的请求，就都会被转发到这个名叫 `nginx-default-backend` 的 `Service`。
+- 所以，你就可以通过部署一个专门的 `Pod`，来为用户返回自定义的 `404` 页面了。
