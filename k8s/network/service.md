@@ -102,3 +102,42 @@ hostnames-bvc05
 - 不过需要注意的是，`IPVS` 模块只负责上述的负载均衡和代理功能。
 - 而一个完整的 `Service` 流程正常工作所需要的包过滤、`SNAT` 等操作，还是要靠 `iptables` 来实现。
 - 只不过，这些辅助性的 `iptables` 规则数量有限，也不会随着 `Pod` 数量的增加而增加。
+
+### dns 记录
+- 在 `Kubernetes` 中，`Service` 和 `Pod` 都会被分配对应的 `DNS A` 记录（从域名解析 `IP` 的记录）。
+- 对于 `ClusterIP` 模式的 `Service` 来说（比如我们上面的例子），它的 `A` 记录的格式是：`..svc.cluster.local`。当你访问这条 `A` 记录的时候，它解析到的就是该 `Service` 的 `VIP` 地址。
+- 对于 `clusterIP=None` 的 `Headless Service` 来说，它的 `A` 记录的格式也是：`..svc.cluster.local`。但是，当你访问这条 A 记录的时候，它返回的是所有被代理的 `Pod` 的 `IP` 地址的集合。当然，如果你的客户端没办法解析这个集合的话，它可能会只会拿到第一个 `Pod` 的 `IP` 地址。
+- 对于 `ClusterIP` 模式的 `Service` 来说，它代理的 `Pod` 被自动分配的 `A` 记录的格式是：`..pod.cluster.local`。这条记录指向 `Pod` 的 `IP` 地址。
+- 而对 `Headless Service` 来说，它代理的 `Pod` 被自动分配的 `A` 记录的格式是：`...svc.cluster.local`。这条记录也指向 `Pod` 的 `IP` 地址。
+- 如果你为 `Pod` 指定了 `Headless Service`，并且 `Pod` 本身声明了 `hostname` 和 `subdomain` 字段，那么这时候 `Pod` 的 `A` 记录就会变成：`<pod的hostname>...svc.cluster.local`，比如：
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: default-subdomain
+spec:
+  selector:
+    name: busybox
+  clusterIP: None
+  ports:
+  - name: foo
+    port: 1234
+    targetPort: 1234
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox1
+  labels:
+    name: busybox
+spec:
+  hostname: busybox-1
+  subdomain: default-subdomain
+  containers:
+  - image: busybox
+    command:
+      - sleep
+      - "3600"
+    name: busybox
+```
+- 在上面这个 `Service` 和 `Pod` 被创建之后，你就可以通过 `busybox-1.default-subdomain.default.svc.cluster.local` 解析到这个 `Pod` 的 `IP` 地址了。
