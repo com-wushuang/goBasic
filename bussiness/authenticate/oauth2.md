@@ -109,18 +109,8 @@ E步骤中，认证服务器发送的HTTP回复，包含以下参数：
 - 除了上述这些，ID Token 的用户信息还可以包含其他信息，由服务器端配置。
 - 另外 `ID Token` 必须进行 `JWS` 签名和 `JWE` 加密，从而保证认证的完整性、不可否认性以及可选的保密性。
 
-## JWT
-**什么是jwt**
-- 一个JWT，应该是如下形式的：
-```shell
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.  
-eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.  
-TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ 
-```
-- 以下三部分组成，它们分别是：
-  - `header`：主要声明了JWT的签名算法；
-  - `payload`：主要承载了各种声明并传递明文数据；
-  - `signture`：拥有该部分的JWT被称为JWS，也就是签了名的JWS；没有该部分的JWT被称为nonsecure JWT 也就是不安全的JWT，此时header中声明的签名算法为none。
+## ID_Token 的作用是什么？
+面试的时候遇到一个问题，为什么不在 oauth2.0 中把access_token 和 id_token 一并返回？
 
-
+## authorization code 的作用？为什么需要授权码？
 
