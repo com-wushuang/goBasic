@@ -68,14 +68,139 @@ user_id:%(user.id)s
 "<target>": "rule:admin_required"
 ```
 - `HTTPCheck`: 该类用于向远程服务器发送HTTP请求，以确定检查结果。`target` 和 `credentials` 将传递到远程服务器进行检查，如果远程服务器返回的响应结果为 `True`，则表示该操作通过权限验证。
-### 使用方法
-
-请求上下文的格式
 
 ## keystone
-### 作用
-1. 用户管理：验证用户身份信息合法性
-2. 认证服务：提供了其余所有组件的认证信息/令牌的管理，创建，修改等等，使用MySQL作为统一的数据库。
-3. Keystone是Openstack用来进行身份验证(authN)及高级授权(authZ)的身份识别服务，目前支持基于口令的authN和用户服务授权。
+### 基本服务
+- `Identity`：即用户身份，主要包括 `user`, `group`。
+- `Resource`：表示资源的集合，主要包括 `project` 和 `domain`，`project` 在早起的版本又被称为 `tenant`。
+- `Assignment`：主要包括 `role` 和 `role assignment`，表示用户在某个 `project` 或者 `domain` 的权限。
+- `Catalog`：主要包括 `endpoint` 和 `service`。
+- `Token`：`token` 是用户身份的一种凭据。
+- `Policy`：即授权机制，采用基于角色的权限控制(`Role Based Access Control`)。
 
-### 
+### 主要组成
+#### User
+- 表示使用服务的用户，可以是人，服务或者系统，只要是使用了 openstack 服务的对象都可以称为用户。
+- 当 `User` 对 `OpenStack` 进行访问时，`Keystone` 会对其身份进行验证，验证通过的用户可以登录 `OpenStack` 云平台并且通过其颁发的 `Token` 去访问资源，用户可以被分配到一个或者多个 `tenant` 或 `project`中。
+
+#### Tenant
+- 表示使用访问的租户，作用是对资源进行分组，或者说是为了使提供的资源之间互相隔离，可以理解为一个一个容器，也称为 `Project`。
+- 在一个租户中可以拥有很多个用户，用户也可以隶属于多个租户，但必须至少属于某个租户。
+- 租户中可使用资源的限制称作 `Tenant Quotas`，就是配额、限额。用户可以根据权限的划分使用租户中的资源。
+
+#### Token
+- 表示提供进行验证的令牌，是 `Keystone` 分配的用于访问 `OpenStack API` 和资源服务的字符串文本。
+- 用户的令牌可能在任何时间被撤销（revoke），就是说用户的Token是具有时间限制的，并且在OpenStack中Token是和特定的Tenant（租户）绑定的，也就是说如果用户属于多个租户，那么其就有多个具有时间限制的令牌。
+
+#### Credential
+- 表示用户凭据，用来证明用户身份的数据，可以是用户名和密码、用户名和`API Key`，或者是 `Keystone` 认证分配的 `Token`。
+
+#### Authentication
+- 表示身份认证，是验证用户身份的过程。将上面的几个结合起来简单说明一下该过程。
+- 首先，用户申请访问等请求，`Keystone` 服务通过检查用户的 `Credential` 确定用户身份；
+- 然后，在第一次对用户进行认证时，用户使用用户名和密码或用户名和API Key作为Credential；
+- 其次，当用户的 `Credential` 被验证之后，`Keystone` 会给用户（用户必定至少属于一个租户）分配一个 `Authentication Token` 来给该用户之后去使用。
+
+#### Service
+- 表示服务，有 `OpenStack` 提供，例如 `Nova`、`Swift` 或者 `Glance` 等等，每个服务提供一个或多个 `Endpoint` 来给不同角色的用户进行资源访问以及操作。
+
+#### Endpoint
+- 表示服务的入口，是一个由 `Service` 监听服务请求的网络地址。客户端要访问某个 `service` ，就需要通过该 `service` 通过的 `Endpoint`（通常是可以访问的一个URL地址）。
+- 在 `OpenStack` 服务架构中，各个服务之间的相互访问也需要通过服务的 `Endpoint` 才可以访问对应的目标服务。
+  - `admin url`: 管理员用户使用
+  - `internal url`: `openstack` 内部组件间互相通信
+  - `public url`: 其他用户访问地址
+
+#### Role
+- 表示角色，类似一访问控制列表——ACL的集合。主要是用于分配操作的权限。角色可以被指定给用户，使得该用户获得角色对应的操作权限。
+- 其实在 `Keystone` 的认证机制中，分配给用户的 `Token` 中包含了用户的角色列表。
+- 换言之，`Role` 扮演的作用可以理解为：当服务被用户访问时，该服务会去解析用户角色列表中的角色的权限（例如可以进行的操作权限、访问哪些资源的权限）。
+
+#### Domain
+- Keystone V3之前的版本中，资源分配是以 `Tenant` 为单位的，这不太符合现实世界中的层级关系。
+- 如一个公司在 `Openstack` 中拥有两个不同的项目，他需要管理两个 `Tenant` 来分别对应这两个项目，并对这两个 `Tenant` 中的用户分别分配角色。
+- 由于在 `Tenant` 之上并不存在一个更高层的概念，无法对 `Tenant` 进行统一的管理，所以这给多 `Tenant` 的用户带来了不便。
+- 为了解决这些问题，`Keystone V3` 提出了新的概念 `Domain` ，即域。
+- 域是 `Keystone` 中的一个全局概念，域的名字在 `Keystone` 中必须是全局唯一的，`Keystone` 提供一个名为 `Default` 的默认域。
+- 域可以包括多个 `Projects`，`Users`，`Groups`，`Roles`。
+
+#### Group
+在 `Keystone V3` 之前，用户的权限管理以每一个用户为单位，需要对每一个用户进行角色分配，并不存在一种对一组用户进行统一管理的方案，这给系统管理员带来了额外的工作和不便。为了解决这些问题，`Keystone V3` 提出了新的概念 `Group` ，即用户组。
+
+### 工作原理
+![keystone_work_flow](https://github.com/com-wushuang/goBasic/blob/main/image/keystone_work_flow.png)
+
+### Keystone 的四种 Token
+#### 四种 Token 的由来
+- `D` 版本时，仅有 `UUID` 类型的 `Token`，`UUID token` 简单易用，却容易给 `Keystone` 带来性能问题，从上图的步骤 `4` 可看出，每当 `OpenStack API` 收到用户请求，都需要向 `Keystone` 验证该 `token` 是否有效。随着集群规模的扩大，`Keystone` 需处理大量验证 `token` 的请求，在高并发下容易出现性能问题。
+- 于是 `PKI(Public Key Infrastructrue) token` 在 `G` 版本运用而生，和 `UUID` 相比，`PKI token` 携带更多用户信息的同时还附上了数字签名，以支持本地认证，从而避免了步骤 4。 因为 `PKI token` 携带了更多的信息，这些信息就包括 `service catalog`，随着 `OpenStack` 的 `Region` 数增多，`service catalog` 携带的 `endpoint` 数量越多，`PKI token` 也相应增大，很容易超出 `HTTP Server` 允许的最大 `HTTP Header`(默认为 8 KB)，导致 `HTTP` 请求失败。
+- `PKIZ token` 就是 `PKI token` 的压缩版，但压缩效果有限，无法良好的处理 `token size` 过大问题。
+- 前三种 `token` 都会持久性存于数据库，与日俱增积累的大量 `token` 引起数据库性能下降，所以用户需经常清理数据库的 `token`。为了避免该问题，社区提出了 `Fernet token`，它携带了少量的用户信息，大小约为 `255 Byte`，采用了对称加密，无需存于数据库中。
+
+#### UUID
+![uuid_token](https://github.com/com-wushuang/goBasic/blob/main/image/uuid_token.png)
+- `UUID token` 是长度固定为 32 Byte 的随机字符串，由 `uuid.uuid4().hex` 生成。
+- 但是因 `UUID token` 不携带其它信息，`OpenStack API` 收到该 `token` 后，既不能判断该 `token` 是否有效，更无法得知该 `token` 携带的用户信息，所以需经图一步骤 4 向 `Keystone` 校验 `token`，**并获用户相关的信息**。
+- `UUID token` 简单美观，不携带其它信息，因此 `Keystone` 必须实现 `token` 的存储和认证，随着集群的规模增大，`Keystone` 将成为性能瓶颈。
+
+#### PKI
+![pki_token](https://github.com/com-wushuang/goBasic/blob/main/image/pki_token.png)
+- `PKI` 的本质就是基于数字签名，`Keystone` 用私钥对 `token_data` 进行数字签名生成 `token`，各个 `API server` 用公钥在本地验证该 `token`。
+- 各个 `API server` 解开 `token` 后就可以拿到用户相关信息。`token_data` 如下:
+````json
+{
+  "token": {
+    "methods": [ "password" ],
+    "roles": [{"id": "5642056d336b4c2a894882425ce22a86", "name": "admin"}],
+    "expires_at": "2015-12-25T09:57:28.404275Z",
+    "project": {
+      "domain": { "id": "default", "name": "Default"},
+      "id": "144d8a99a42447379ac37f78bf0ef608", "name": "admin"},
+    "catalog": [
+      {
+        "endpoints": [
+          {
+            "region_id": "RegionOne",
+            "url": "http://controller:5000/v2.0",
+            "region": "RegionOne",
+            "interface": "public",
+            "id": "3837de623efd4af799e050d4d8d1f307"
+          },
+          ......
+      ]}],
+    "extras": {},
+    "user": {
+      "domain": {"id": "default", "name": "Default"},
+      "id": "1552d60a042e4a2caa07ea7ae6aa2f09", "name": "admin"},
+    "audit_ids": ["ZCvZW2TtTgiaAsVA8qmc3A"],
+    "issued_at": "2015-12-25T08:57:28.404304Z"
+  }
+}
+````
+#### PKIZ
+`PKIZ` 在 `PKI` 的基础上做了压缩处理，但是压缩的效果极其有限，一般情况下，压缩后的大小为 `PKI token` 的 `90 %` 左右，所以 `PKIZ` 不能友好的解决 `token size` 太大问题。
+
+#### Fernet
+![fernet_token](https://github.com/com-wushuang/goBasic/blob/main/image/fernet_token.png)
+- 用户可能会碰上这么一个问题，当集群运行较长一段时间后，访问其 `API` 会变得奇慢无比，究其原因在于 `Keystone` 数据库存储了大量的 `token` 导致性能太差，解决的办法是经常清理 `token`。
+- 为了避免上述问题，社区提出了`Fernet token`，它采用对称加的方式加密 `token_data`。
+- `Fernet` 是专为 `API token` 设计的一种轻量级安全消息格式，不需要存储于数据库，减少了磁盘的 `IO`，带来了一定的性能提升。为了提高安全性，需要采用 `Key Rotation` 更换密钥。
+
+#### 总结
+|Token 类型|UUID|PKI|PKIZ|Fernet|
+|---- | ---- | ---- | ---- | ---- |
+|大小|32 Byte|KB 级别|KB 级别|约 255 Byte|
+|支持本地认证	|不支持|	支持	|支持|不支持|
+|Keystone 负载|大|小|小|大|
+|存储于数据库|是|是|是|否|
+｜携带信息｜无｜user, catalog 等｜user, catalog 等｜user 等｜
+
+#### 如何选择 Token
+`Token` 类型的选择涉及多个因素，包括 `Keystone server` 的负载、`region` 数量、安全因素、维护成本以及 `token` 本身的成熟度。`region` 的数量影响 `PKI/PKIZ token` 的大小，从安全的角度上看，`UUID` 无需维护密钥，`PKI` 需要妥善保管 `Keystone server` 上的私钥，`Fernet` 需要周期性的更换密钥，因此从安全、维护成本和成熟度上看，`UUID > PKI/PKIZ > Fernet` 如果：
+- Keystone  负载低，region 少于 3 个，采用 UUID token。
+- Keystone  负载高，region 少于 3 个，采用 PKI/PKIZ token。
+- Keystone  负载低，region 大与或等于 3 个，采用 UUID token。
+- Keystone  负载高，region 大于或等于 3 个，K 版本及以上可考虑采用 Fernet token。
+
+## API鉴权和细粒度权限访问控制
+

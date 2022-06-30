@@ -114,3 +114,4 @@ E步骤中，认证服务器发送的HTTP回复，包含以下参数：
 
 ## authorization code 的作用？为什么需要授权码？
 
+## access_token 是什么样的？
