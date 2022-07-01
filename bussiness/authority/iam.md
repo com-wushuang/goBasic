@@ -1,9 +1,9 @@
 # OpenAPI架构
 ## 问题描述
-- 当前平台架构下，外部调用内部服务接口仅支持 `session` 及 `keystone token`，扩展性较低，不能和 `OAuth2` 等三方认证协议进行集成。
-- `keystone` 对细粒度权限体系支持力度不够。
-- `session data` 需要在业务代码中解析，数据结构和语言深度绑定。
-- 在集群内部，各服务之间调用也缺乏规范的认证和鉴权，无法记录和跟踪，存在一定的安全隐患和运维难点。
+![platform_weakness](https://github.com/com-wushuang/goBasic/blob/main/image/platform_weakness.png)
+- 用户表示层: 外部调用内部服务接口仅支持 `session` 及 `keystone token`，扩展性较低，不能和 `OAuth2` 等三方认证协议进行集成。
+- 业务逻辑层: `session_data` 需要在业务代码中解析，数据结构和语言深度绑定。`keystone` 对细粒度权限体系支持力度不够。
+- 数据访问层: 业务逻辑对数据访问层的调用划分不够明确，各 `service` 可以直接调用其他 `servcie` 对应的数据访问层 `API`，部分 `API` 不具备认证及鉴权能力。
 
 ### 平台的认证方式
 1. `用户名密码认证`: 用户提交用户名和密码，keystone 对其进行认证。
@@ -20,9 +20,76 @@
 - 用户在操作 `OpenStack` 的所有资源之前，都需要对用户携带的信息进行认证和鉴权，认证需要调用 `keystone` 服务。鉴权模块 `oslo.policy` 以 `library` 形态与资源服务(如 `nova` )捆绑在一起，每个资源服务提供一个 `policy.json` 文件。
 - 该文件提供哪些角色操作哪些资源的权限信息，目前只支持 `admin` 和 `member` 两种角色，如果需要增加新的角色，且分配不同的操作权限，需要手动修改 `policy.json` 文件，即不支持动态控制权限分配。
 
-### session data 是什么样的？为什么说是跟语言深度绑定的？
+### session_data 和语言深度绑定？
+因为 `django` 层是 `python` 代码实现的，在对 session_data 进行序列化时，并没有使用标准的序列化格式，导致这种序列化后的 session_data 在其他的语言环境中无法使用。
 
-### 各服务之间调用也缺乏规范的认证和鉴权，无法记录和跟踪？
+## 方案提议
+![openapi_architect](https://github.com/com-wushuang/goBasic/blob/main/image/openapi_architect.png)
+
+### 外部认证协议转换网关
+- 目前的架构体系中，位于服务边界的 `Ingress` 使用的是 `nginx-ingress`，具备的主要功能是路由功能，根据各个服务声明的 `ingress` 配置，分发请求到各个服务的 `dashboard-api service`。
+- 通过结合 `ORY` 的 `oathkeeper` 项目，可以使其具备转换外部请求认证协议的能力。在 `Ingress` 层读取外部的各类认证方式，转换为 `JWT` 数据后再转发给各 `service`，可以屏蔽外部认证协议的复杂度，内部只需使用统一的 `JWT` 方式传递请求的用户信息，进行认证及后续的鉴权操作。
+
+### 基于OPA的分布式鉴权
+- 当前系统中，鉴权能力主要使用的是 `OpenStack` 的 `policy` 机制，对细粒度的鉴权能力支持较弱，同时也难以动态地进行修改权限。
+- 为了解决对各个服务的细粒度鉴权能力，`OpenAPI` 的架构将结合 `IAM` 的 `OPA` 分布式鉴权，通过为提供 `OpenAPI` 服务的 `Pod` 挂载一个 `Sidercar` 容器，提供专属的鉴权服务，可以支持 `API` 级别到细粒度的鉴权服务，并可通过 `IAM` 进行动态配置不同的策略进行分发。
+
+### 认证鉴权流程
+- 终端用户调用
+  - 携带认证凭证访问接口
+  - `Ingress` 提取认证凭证，发生给 `oauth-keeper` 服务
+  - `oauth-keeper` 根据请求的路由和凭证，生成对应的 `JWT` 信息，返回给 `Ingress`
+  - `Ingress` 携带转换后的 `JWT`，将请求发送给后端业务 `Service`
+  - 后端业务 `Service` 的 `sidecar proxy` 验证 `JWT`，并进行鉴权，通过则进行后续处理
+- 业务 `Service` 间调用
+  - 后端业务向 `IAM` 发送调用其他服务请求
+  - `IAM` 根据请求中的信息，判断此服务是否有权限访问对应的其他 `Servcie`
+  - 若判定通过，生成对应的JWT信息，返回给后端业务
+  - 后端业务携带JWT信息访问其他服务
+  - 后端业务 Service 的 sidecar proxy 验证 JWT，并进行鉴权，通过则进行后续处理
+- 业务 `Sevice` 调用 `Library Service`
+  - 通过 `mTLS` 进行认证
+  - 访问权限由部署时定义 `AuthorizationPolicy CRD` 进行规定
+  - `IAM` 可动态配置 `AuthorizationPolicy CRD` 配置
+
+### API权限和细粒度权限
+通常可以把权限的验证分成两个步骤: 先确定职能，然后确定职能作用范围：
+- 比如，先确定你能看订单，然后确定你能看哪些订单；先确定你能看工资，然后确定你能看谁的工资。
+- 既然这两步看上去分得很清楚，那么我们不妨给它们分别取名。用户能不能执行某个动作，使用某个功能，是功能权限，而能不能在某个数据上执行该功能（访问某部分数据），是数据权限。
+- 功能权限是指的 `API` 权限。
+- 数据权限是指的 `细粒度` 权限。
+
+#### API 权限
+- 对一个API进行鉴权，只需要三个要素：身份、动作、规则。
+- API 权限适合在业务代码之前做鉴权，因为它依赖的上下文就是上面那三个要素。
+- 而在请求进入业务代码之前，这三个要素都是齐全。
+
+**例子**
+- 设有这么一个订单管理系统，其中有一个订单查询功能。其权限要求如下:
+  - 买家只能看到自己下的订单
+  - 卖家只能看到下给自己的订单
+  - 运营商可以看到所有订单
+- 这些操作，虽然查看的都是订单，但是因为是不同的业务上下文，表现到 API 呈现上也会有不同。:
+  - 买家看自己的订单：/CustomerViewOrders
+  - 卖家看自己的订单：/MerchantViewOrders
+  - 运营商看任意订单：/AdminViewOrders
+- 然后，我们可以制订如下规则:
+  - 所有这些 API 都要求用户处于已登录状态
+  - 对于 /CustomerViewOrders ，访问者必须有 customer 身份
+  - 对于 /MerchantViewOrders ，访问者必须有 merchant 身份
+  - 对于 /AdminViewOrders，要求当前用户必须有 admin 身份
+
+#### 细粒度权限
+- 细粒度鉴权需要的元素有: 身份、动作、规则、属性(请求的资源数据)。
+- 比 API 权限多了属性元素，在做规则判断的时候，需要依赖请求的数据。
+- 因此，这种鉴权过程并不能前置在业务代码之前，因为资源的数据只会在业务代码中出现。
+- 也正是因为如此，细粒度的权限又称之为数据权限，而且需要耦合在业务代码中。
+- 为了减少耦合，我们能够将规则抽离出业务代码。
+- 在实践中，利用 `opa` 中的 `rego` 语法去定义规则，并将其加载在 `opa` 这个策略引擎中，和业务代码解耦。
+- 业务代码携带身份、动作、资源数据，请求 `opa` 这个策略引擎，`opa` 根据输入执行规则，返回给业务代码 `allow` 或 `deny`。
+- 规则就像是一个函数，身份、动作、属性是三个输入的参数
+
+### 为什么要用 Envoy Sidecar
 
 ## oslo.policy
 ### 策略规则表达式
@@ -193,7 +260,10 @@ user_id:%(user.id)s
 |支持本地认证	|不支持|	支持	|支持|不支持|
 |Keystone 负载|大|小|小|大|
 |存储于数据库|是|是|是|否|
-｜携带信息｜无｜user, catalog 等｜user, catalog 等｜user 等｜
+|携带信息|无|user、catalog 等|user、catalog 等|user 等|
+|涉及加密方式|无|非对称加密|非对称加密|对称加密(AES)|
+|是否压缩|否|	否|是|否|
+|版本支持|D|G|J|K|
 
 #### 如何选择 Token
 `Token` 类型的选择涉及多个因素，包括 `Keystone server` 的负载、`region` 数量、安全因素、维护成本以及 `token` 本身的成熟度。`region` 的数量影响 `PKI/PKIZ token` 的大小，从安全的角度上看，`UUID` 无需维护密钥，`PKI` 需要妥善保管 `Keystone server` 上的私钥，`Fernet` 需要周期性的更换密钥，因此从安全、维护成本和成熟度上看，`UUID > PKI/PKIZ > Fernet` 如果：
@@ -201,6 +271,4 @@ user_id:%(user.id)s
 - Keystone  负载高，region 少于 3 个，采用 PKI/PKIZ token。
 - Keystone  负载低，region 大与或等于 3 个，采用 UUID token。
 - Keystone  负载高，region 大于或等于 3 个，K 版本及以上可考虑采用 Fernet token。
-
-## API鉴权和细粒度权限访问控制
 
