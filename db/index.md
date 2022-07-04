@@ -85,3 +85,33 @@ MySQL 索引按叶子节点存储的是否为完整表数据分为:
 - 而 `a>1 and b=2`，`a` 字段可以匹配上索引，但 `b` 值不可以，因为 `a` 的值是一个范围，在这个范围中 `b` 是无序的。
 
 ## 不使用索引的原因
+有时候在MySQL上执行查询时，即使WHERE条件中涉及的字段已经建立了索引，但MySQL仍然没有使用到该索引，下面针对各种可能的原因进行总结。
+- where中的字段涉及隐式数据类型转换
+```sql
+SELECT * FROM users WHERE a = 1
+```
+- 建有联合索引，但查询条件不符合最左匹配原则，users表的a、b字段建有联合索引（ab）
+```sql
+SELECT * FROM users WHERE b = '1'
+```
+- 字段使用了表达式、函数
+```sql
+SELECT * FROM users WHERE b + 1 = 2
+SELECT * FROM users WHERE FROM_UNIXTIME(b) = 2
+```
+- 模糊查询时，查询条件第一个字符使用了通配符
+```sql
+SELECT * FROM users WHERE b LIKE '%tony'
+```
+- 使用了OR查询
+```sql
+SELECT * FROM users WHERE a = 1 OR b = 1
+```
+- 优化器使用错了索引
+```
+有时候MySQL的优化器会认为有其它的索引更合适，转而使用其它索引来查询的情况，甚至放弃索引使用全表扫描来查询，如果出现这种情况，可以尝试：
+1.使用FORCE INDEX关键字来强制MySQL使用正确的索引
+2.有可能是索引的统计信息不够准确，导致优化器判断出错，使用ANALYZE TABLE 表名命令来重新统计索引信息
+```
+
+## 
