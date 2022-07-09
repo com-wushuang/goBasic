@@ -88,10 +88,13 @@ E步骤中，认证服务器发送的HTTP回复，包含以下参数：
      }
 ```
 
-## OIDC
-总的来说，`OAuth 2.0` 协议只提供了授权认证，并没有身份认证的功能，而这一缺陷就由 `OIDC` 协议补上了。
+**authorization code 的作用？为什么需要授权码？**
+- 用户授权的过程全程为 `URL` 跳转，额外的信息只能附着在 `url` 后缀中，所以在用户确认后，授权服务器跳转到应用服务器时，不直接携带 `token`，而是携带 `code`，让 `client` 的后台应用去使用 `code` 获取 `token`，降低了 `token` 的泄露风险。
+- 通常情况下，`server` 是无法确认 `client` 身份的，此方案中，`client` 需要向 `server` 发送 `secret` 来确认身份。
+- `code` 仅能使用一次并且使用时基于一次浏览器 `session`。
 
-`OIDC` 的登录过程与 `OAuth` 相比，最主要的扩展就是提供了 `ID Token`。
+## OIDC
+总的来说，`OAuth 2.0` 协议只提供了授权认证，并没有身份认证的功能，而这一缺陷就由 `OIDC` 协议补上了。`OIDC` 的登录过程与 `OAuth` 相比，最主要的扩展就是提供了 `ID Token`。
 
 **ID Token**
 
@@ -109,9 +112,66 @@ E步骤中，认证服务器发送的HTTP回复，包含以下参数：
 - 除了上述这些，ID Token 的用户信息还可以包含其他信息，由服务器端配置。
 - 另外 `ID Token` 必须进行 `JWS` 签名和 `JWE` 加密，从而保证认证的完整性、不可否认性以及可选的保密性。
 
-## ID_Token 的作用是什么？
-面试的时候遇到一个问题，为什么不在 oauth2.0 中把access_token 和 id_token 一并返回？
+## 常见的 token 对比
+**access_token**
+- `Access Token` 的格式可以是 `JWT` 也可以是一个随机字符串。
+- 当携带 `Access Token` 访问受保护的 `API` 接口，`API` 接口检验 `Access Token` 中的 `scope` 权限项目决定是否返回资源，所以 `Access Token` 用于调用接口，而不是用作用户认证。
+- 绝对不要使用 `Access Token` 做认证，`Access Token` 本身不能标识用户是否已经认证，`Access Token` 中只包含了用户 `id`，在 `sub` 字段。
+- 在你开发的应用中，应该将 `Access Token` 视为一个随机字符串，不要试图从中解析信息，token_data(需要理解 token 和 token_data 之间的区别) 如下:
+```
+{
+  "jti": "YEeiX17iDgNwHGmAapjSQ",
+  "sub": "601ad46d0a3d171f611164ce", // subject 的缩写，为用户 ID
+  "iat": 1612415013,
+  "exp": 1613624613,
+  "scope": "openid profile offline_access",
+  "iss": "https://yelexin-test1.authing.cn/oidc",
+  "aud": "601ad382d02a2ba94cf996c4" // audience 的缩写，为应用 ID
+}
+```  
+- 你希望通过 Access Token 获取更多的用户信息，可以携带 `Access Token` 调用授权服务器的用户信息端点(user_info)来获取完整的用户信息
 
-## authorization code 的作用？为什么需要授权码？
+**id_token**
+- `Id Token` 的格式为 `JWT` ，`Id Token` 仅适用于认证场景。
+- 不推荐使用 `Id Token` 来进行 `API` 的访问鉴权。
+- 每个 `Id Token` 的受众（`aud` 参数）是发起认证授权请求的应用的 `ID`（或编程访问账号的 `AK`）。
+```
+{
+  "sub": "601ad46d0a3d171f611164ce", // subject 的缩写，为用户 ID
+  "birthdate": null,
+  "family_name": null,
+  "gender": "U",
+  "given_name": null,
+  "locale": null,
+  "middle_name": null,
+  "name": null,
+  "nickname": null,
+  "picture": "https://files.authing.co/authing-console/default-user-avatar.png",
+  "preferred_username": null,
+  "profile": null,
+  "updated_at": "2021-02-04T05:02:25.932Z",
+  "website": null,
+  "zoneinfo": null,
+  "at_hash": "xnpHKuO1peDcJzbB8xBe4w",
+  "aud": "601ad382d02a2ba94cf996c4", // audience 的缩写，为应用 ID
+  "exp": 1613624613,
+  "iat": 1612415013,
+  "iss": "https://oidc1.authing.cn/oidc"
+}
+```
 
-## access_token 是什么样的？
+**refresh_token**
+- `AccessToken` 和 `IdToken` 是 `JSON Web Token`，有效时间通常较短。通常用户在获取资源的时候需要携带 `AccessToken`，当 `AccessToken` 过期后，用户需要获取一个新的 `AccessToken`。
+- `Refresh Token` 用于获取新的 `AccessToken`。这样可以缩短 `AccessToken` 的过期时间保证安全，同时又不会因为频繁过期重新要求用户登录。
+- 用户在初次认证时，`Refresh Token` 会和 `AccessToken`、`IdToken` 一起返回。你的应用必须安全地存储 `Refresh Token`，它的重要性和密码是一样的，因为 `Refresh Token` 能够一直让用户保持登录。
+- 应用携带 `Refresh Token` 向 `Token` 端点发起请求时，授权服务器每次都会返回相同的 `Refresh Token` 和新的 `AccessToken`、`IdToken`，直到 `Refresh Token` 过期。
+```
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InIxTGtiQm8zOTI1UmIyWkZGckt5VTNNVmV4OVQyODE3S3gwdmJpNmlfS2MifQ.eyJqdGkiOiJ4R01uczd5cmNFckxiakNRVW9US1MiLCJzdWIiOiI1YzlmNzVjN2NjZjg3YjA1YTkyMWU5YjAiLCJpc3MiOiJodHRwczovL2F1dGhpbmcuY24iLCJpYXQiOjE1NTQ1Mzc4NjksImV4cCI6MTU1NDU0MTQ2OSwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBvZmZsaW5lX2FjY2VzcyBwaG9uZSBlbWFpbCIsImF1ZCI6IjVjYTc2NWUzOTMxOTRkNTg5MWRiMTkyNyJ9.wX05OAgYuXeYM7zCxhrkvTO_taqxrCTG_L2ImDmQjMml6E3GXjYA9EFK0NfWquUI2mdSMAqohX-ndffN0fa5cChdcMJEm3XS9tt6-_zzhoOojK-q9MHF7huZg4O1587xhSofxs-KS7BeYxEHKn_10tAkjEIo9QtYUE7zD7JXwGUsvfMMjOqEVW6KuY3ZOmIq_ncKlB4jvbdrduxy1pbky_kvzHWlE9El_N5qveQXyuvNZVMSIEpw8_y5iSxPxKfrVwGY7hBaF40Oph-d2PO7AzKvxEVMamzLvMGBMaRAP_WttBPAUSqTU5uMXwMafryhGdIcQVsDPcGNgMX6E1jzLA",
+  "expires_in": 3600,
+  "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InIxTGtiQm8zOTI1UmIyWkZGckt5VTNNVmV4OVQyODE3S3gwdmJpNmlfS2MifQ.eyJzdWIiOiI1YzlmNzVjN2NjZjg3YjA1YTkyMWU5YjAiLCJub25jZSI6IjIyMTIxIiwiYXRfaGFzaCI6Ik5kbW9iZVBZOEFFaWQ2T216MzIyOXciLCJzaWQiOiI1ODM2NzllNC1lYWM5LTRjNDEtOGQxMS1jZWFkMmE5OWQzZWIiLCJhdWQiOiI1Y2E3NjVlMzkzMTk0ZDU4OTFkYjE5MjciLCJleHAiOjE1NTQ1NDE0NjksImlhdCI6MTU1NDUzNzg2OSwiaXNzIjoiaHR0cHM6Ly9hdXRoaW5nLmNuIn0.IQi5FRHO756e_eAmdAs3OnFMU7QuP-XtrbwCZC1gJntevYJTltEg1CLkG7eVhdi_g5MJV1c0pNZ_xHmwS0R-E4lAXcc1QveYKptnMroKpBWs5mXwoOiqbrjKEmLMaPgRzCOdLiSdoZuQNw_z-gVhFiMNxI055TyFJdXTNtExt1O3KmwqanPNUi6XyW43bUl29v_kAvKgiOB28f3I0fB4EsiZjxp1uxHQBaDeBMSPaRVWQJcIjAJ9JLgkaDt1j7HZ2a1daWZ4HPzifDuDfi6_Ob1ZL40tWEC7xdxHlCEWJ4pUIsDjvScdQsez9aV_xMwumw3X4tgUIxFOCNVEvr73Fg",
+  "refresh_token": "WPsGJbvpBjqXz6IJIr1UHKyrdVF",
+  "scope": "openid profile offline_access phone email",
+  "token_type": "Bearer"
+}
+```
