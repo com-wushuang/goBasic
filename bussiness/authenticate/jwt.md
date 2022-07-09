@@ -7,12 +7,12 @@ JWT的主要目的是在服务端和客户端之间以安全的方式来转移�
 - 客户端机密。
 
 ## 名词解释
-`JWS`：`Signed JWT` 签名过的 `jwt`
-`JWE`：`Encrypted JWT` 部分 `payload` 经过加密的 `jwt`；目前加密 `payload` 的操作不是很普及；
-`JWK`：`JWT` 的密钥，也就是我们常说的 `scret`；
-`JWKset`：`JWT key set`在非对称加密中，需要的是密钥对而非单独的密钥，在后文中会阐释；
-`JWA`：当前 `JWT` 所用到的密码学算法；
-`nonsecure JWT`：当头部的签名算法被设定为 `none` 的时候，该 `JWT` 是不安全的；因为签名的部分空缺，所有人都可以修改。
+- `JWS`：`Signed JWT` 签名过的 `jwt`
+- `JWE`：`Encrypted JWT` 部分 `payload` 经过加密的 `jwt`；目前加密 `payload` 的操作不是很普及；
+- `JWK`：`JWT` 的密钥，也就是我们常说的 `scret`；
+- `JWKset`：`JWT key set`在非对称加密中，需要的是密钥对而非单独的密钥，在后文中会阐释；
+- `JWA`：当前 `JWT` 所用到的密码学算法；
+- `nonsecure JWT`：当头部的签名算法被设定为 `none` 的时候，该 `JWT` 是不安全的；因为签名的部分空缺，所有人都可以修改。
 
 ## JWT 组成
 一个通常你看到的jwt，由以下三部分组成，它们分别是：
