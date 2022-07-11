@@ -40,7 +40,7 @@ kubectl taint nodes node-01 key1=value1:NoSchedule
 - 为 `node-01` 节点打上了一个污点，污点的 `key` 为 `key1`，`value` 为 `value1`，效果是 `NoSchedule`，目前效果主要有以下固定值：
   - `NoSchedule`：不允许调度
   - `PreferNoSchedule`：尽量不调度
-  - `NoExecute`：如果该节点上不容忍该污点的Pod已经在运行会被驱逐，同时如果不会将不容忍该污点的Pod调度到该节点上
+  - `NoExecute`：如果该节点上不容忍该污点的 `Pod` 已经在运行会被驱逐，同时如果不会将不容忍该污点的 `Pod` 调度到该节点上
 
 ## Pod 资源限制
 `Kubernetes` 对 `Pod` 进行调度的时候，我们可以对 `Pod` 进行一些定义，来干涉调度器 `Scheduler` 的分配逻辑。
