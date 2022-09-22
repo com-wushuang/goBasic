@@ -31,6 +31,7 @@
 
 ![](https://raw.githubusercontent.com/com-wushuang/pics/main/tun%E5%AD%97%E7%AC%A6%E8%AE%BE%E5%A4%87%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%9B%BE.png)
 ### 通过文件字符设备读数据实验
+**一般从 `tun` 设备读取数据目的都是：从网络协议栈读取原始的包，然后在用户程序中做封装（tcp、udp等），然后再用 socket API 发向网络协议栈。**
 ```go
 package main
 
@@ -115,11 +116,11 @@ get data from tun: [69 0 0 84 67 198 64 0 64 1 111 123 192 168 3 11 192 168 3 12
 get data from tun: [69 0 0 84 69 235 64 0 64 1 109 86 192 168 3 11 192 168 3 12 8 0 23 135 139 136 0 4 216 82 40 99 0 0 0 0 138 99 11 0 0 0 0 0 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55]
 ```
 6. 整个过程的数据流程如图所示:
-![](https://raw.githubusercontent.com/com-wushuang/pics/main/ping%E6%B5%8B%E8%AF%95tun%E8%AE%BE%E5%A4%87.png)
-
+![](https://raw.githubusercontent.com/com-wushuang/pics/main/ping%E6%B5%8B%E8%AF%95tun.png)
 
 ### 通过文件字符设备写数据实验
-todo
+一般往 `tun` 设备写数据目的：程序用 `Socket API` 读取到的都是封装过后的包，在程序解封装后，通过写入字符设备，让解封后的原始数据包再次进入网络协议栈
+1.程序启动会自动创建字符设备，
 
 ## tap/tun 的区别
 `tap` 和 `tun` 虽然都是虚拟网络设备，但它们的工作层次还不太一样。
@@ -128,4 +129,3 @@ todo
 
 ## tap/tun 的应用
 从上面的数据流程中可以看到，`tun` 设备充当了一层隧道，所以，`tap/tun` 最常见的应用也就是用于隧道通信，比如 `VPN`，包括 `tunnel` 和应用层的 `IPsec` 等，其中比较有名的两个开源项目是 `openvpn` 和 `VTun`。
-
