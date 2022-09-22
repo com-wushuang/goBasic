@@ -119,13 +119,95 @@ get data from tun: [69 0 0 84 69 235 64 0 64 1 109 86 192 168 3 11 192 168 3 12 
 ![](https://raw.githubusercontent.com/com-wushuang/pics/main/ping%E6%B5%8B%E8%AF%95tun.png)
 
 ### 通过文件字符设备写数据实验
-一般往 `tun` 设备写数据目的：程序用 `Socket API` 读取到的都是封装过后的包，在程序解封装后，通过写入字符设备，让解封后的原始数据包再次进入网络协议栈
-1.程序启动会自动创建字符设备，
+- 一般往 `tun` 设备写数据目的：程序用 `Socket API` 读取到的都是封装过后的包，在程序解封装后，通过写入字符设备，让解封后的原始数据包再次进入网络协议栈
+- 上面的例子中，`ping` 客户端的流量虽然能够顺利进入 `tun0` 设备，数据最后被用户程序读取走了，并没有进入内核网络协议栈，而 `ICMP` 协议是内核网络协议栈实现的，因此前面的例子没有回复是理所当然的。
+- 我们完成上面这个例子的虚线部分，把 `ICMP` 协议数据送回协议栈
+```go
+package main
 
-## tap/tun 的区别
-`tap` 和 `tun` 虽然都是虚拟网络设备，但它们的工作层次还不太一样。
-- `tap` 是一个二层设备（或者以太网设备），只能处理二层的以太网帧；
-- `tun` 是一个点对点的三层设备（或网络层设备），只能处理三层的 `IP` 数据包。
+import (
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
-## tap/tun 的应用
-从上面的数据流程中可以看到，`tun` 设备充当了一层隧道，所以，`tap/tun` 最常见的应用也就是用于隧道通信，比如 `VPN`，包括 `tunnel` 和应用层的 `IPsec` 等，其中比较有名的两个开源项目是 `openvpn` 和 `VTun`。
+	"github.com/fatih/color"
+	"github.com/songgao/water"
+	flag "github.com/spf13/pflag"
+)
+
+func main() {
+	flag.Parse()
+
+	// create tun/tap interface
+	iface, err := water.New(water.Config{
+		DeviceType: water.TUN,
+	})
+	if err != nil {
+		color.Red("create tun device failed,error: %v", err)
+		return
+	}
+
+	fmt.Println("the device name is"+iface.Name())
+
+	// 起一个协程去读取和发送数据
+	go IfaceReadAndWrite(iface)
+
+	sig := make(chan os.Signal, 3)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGABRT, syscall.SIGHUP)
+	<-sig
+}
+
+func IfaceReadAndWrite(iface *water.Interface) {
+	packet := make([]byte, 2048)
+	for {
+		// 不断从 tun 设备读取数据
+		n, err := iface.Read(packet)
+		if err != nil {
+			color.Red("READ: read from tun failed")
+			break
+		}
+
+		// 再把数据原封不动写入 tun 设备
+		_,err= iface.Write(packet[:n])
+		if err != nil {
+			color.Red("WRITE: write to tun failed")
+			break
+		}
+	}
+}
+```
+
+## Tap/Tun 的区别
+`tun、tap` 作为虚拟网卡，除了不具备物理网卡的硬件功能外，它们和物理网卡的功能是一样的，此外tun、tap负责在内核网络协议栈和用户空间之间传输数据。
+
+`tun` 和 `tap` 都是虚拟网卡设备，但是:
+- `tun` 是三层设备，其封装的外层是 `IP` 头
+- `tap` 是二层设备，其封装的外层是以太网帧`(frame)`头
+- `tun` 是 `PPP` 点对点设备，没有 `MAC` 地址
+- `tap` 是以太网设备，有 `MAC` 地址
+- `tap` 比 `tun` 更接近于物理网卡，可以认为，tap设备等价于去掉了硬件功能的物理网卡
+
+
+## Tap/Tun 的应用
+虚拟网卡的两个主要功能是：
+- 连接其它设备(虚拟网卡或物理网卡)和虚拟交换机(bridge)
+- 提供用户空间程序去收发虚拟网卡上的数据
+
+基于这两个功能，`tap` 设备通常用来连接其它网络设备(它更像网卡)，tun设备通常用来结合用户空间程序实现再次封装。换句话说，`tap` 设备通常接入到虚拟交换机`(bridge)`上作为局域网的一个节点，`tun` 设备通常用来实现三层的 `ip` 隧道。
+
+但 `tun/tap` 的用法是灵活的，只不过上面两种使用场景更为广泛。例如，除了可以使用 `tun` 设备来实现 `ip` 层隧道，使用 `tap` 设备实现二层隧道的场景也颇为常见。
+## 程序写入虚拟网卡时的注意事项
+用户空间的程序不可随意向虚拟网卡写入数据，因为写入虚拟网卡的这些数据都会被内核网络协议栈进行解封处理，就像来自物理网卡的数据都会被解封一样。
+
+因此，如果用户空间程序要写 `tun/tap` 设备，所写入的数据需具有特殊结构：
+- 要么是已经封装了 `PORT` 的数据，即传输层的 `tcp` 数据段或udp数据报
+- 要么是已经封装了 `IP+PORT` 的数据，即 `ip` 层数据包
+- 要么是已经封装了 `IP+PORT+MAC` 的数据，即链路层数据帧
+- 要么是其它符合 `tcp/ip` 协议栈的数据，比如二层的 `PPP` 点对点数据，比如三层的 `icmp` 协议数据
+- 也就是说，程序只能向虚拟网卡写入已经封装过的数据。
+
+由于网络数据的封装都由内核的网络协议栈负责，所以程序写入虚拟网卡的数据实际上都原封不动地来自于上一轮的网络协议栈，用户空间程序无法对这部分数据做任何修改。
+
+也就是说，这时**写虚拟网卡的用户空间程序仅充当了一个特殊的【转发】程序：要么转发四层tcp/udp数据，要么转发三层数据包，要么转发二层数据帧。**
+
